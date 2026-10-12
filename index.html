@@ -175,7 +175,12 @@ const ARCH = { general: "modelos/lector.onnx", spmk: "modelos/lector_spmk700.onn
 async function sesion(tipo) {
   if (sesiones[tipo]) return sesiones[tipo];
   let buf = await tx("modelos", "readonly", s => s.get(tipo)), origen = "actualizado";
-  if (!buf) { buf = await (await fetch(ARCH[tipo])).arrayBuffer(); origen = "original"; }
+  if (!buf) {
+    const r = await fetch(ARCH[tipo]);
+    if (!r.ok) throw new Error(`no encuentro ${ARCH[tipo]} en el sitio (error ${r.status}). Revisá que la carpeta modelos esté subida al repositorio.`);
+    buf = await r.arrayBuffer(); origen = "original";
+    if (buf.byteLength < 100000) throw new Error(`${ARCH[tipo]} llegó incompleto (${buf.byteLength} bytes).`);
+  }
   ort.env.wasm.numThreads = 1;
   const t0 = performance.now();
   sesiones[tipo] = await ort.InferenceSession.create(buf, { executionProviders: ["wasm"] });
@@ -414,7 +419,7 @@ try { const e = localStorage.getItem("lc_equipo"); if (e) { $("equipo").value = 
     const st = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
     vid.srcObject = st; await vid.play();
   } catch (e) { texto("Sin cámara: " + e.message); return; }
-  try { await sesion(tipoModelo()); $("estModelo").textContent = "Modelo listo"; } catch (e) { $("estModelo").textContent = "No cargó el modelo: " + e.message; return; }
+  try { await sesion(tipoModelo()); $("estModelo").textContent = "Modelo listo"; } catch (e) { $("estModelo").textContent = "No cargó el modelo: " + e.message; texto("Sin modelo"); return; }
   sesion(tipoModelo() === "spmk" ? "general" : "spmk").catch(() => {});
   ponerGuia(); reiniciar();
 })();

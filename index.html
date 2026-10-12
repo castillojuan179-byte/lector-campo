@@ -118,7 +118,7 @@ video{transform-origin:50% 50%;transition:transform .15s linear}
 <div class="app">
   <div class="cab">
     <span class="ico" id="ico"></span>
-    <div><b>Lector de campo <span style="font-size:11px;color:#FF8D21;font-weight:700">v2 · cámara</span></b><small id="estModelo">Cargando modelo…</small></div>
+    <div><b>Lector de campo <span style="font-size:11px;color:#FF8D21;font-weight:700">v3 · cámara + recuadros</span></b><small id="estModelo">Cargando modelo…</small></div>
     <button class="chipN" id="abrirDatos">Datos <i id="nGuard">0</i></button>
   </div>
   <div class="sel">
@@ -214,7 +214,7 @@ const valido = t => /^-?\d+(\.\d+)?$/.test(t);
 const vid = $("video"), foto = $("foto");
 const MARG = { i: .42, d: .32, a: .49, b: .47 };   // márgenes alrededor de los números: los mismos de todos los recortes de entrenamiento
 const ASPECTO_NUM = 1.83;                            // proporción típica de un renglón de números
-let rol = "patron", modo = "vivo", zoomHW = false, zoomDig = 1, caja = null, fijada = null, leyendo = 0;
+let fotoBlob = null, rol = "patron", modo = "vivo", zoomHW = false, zoomDig = 1, caja = null, fijada = null, leyendo = 0;
 function ponerGuia() {
   const v = $("visor").getBoundingClientRect(), w = Math.min(v.width * 0.5, v.height * 0.45 * ASPECTO_NUM), h = w / ASPECTO_NUM;
   Object.assign($("guia").style, { width: w + "px", height: h + "px", left: (v.width - w) / 2 + "px", top: (v.height - h) / 2 - 30 + "px" });
@@ -305,13 +305,20 @@ function recorteGuardar() {
   const x = c.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(foto, r.sx, r.sy, r.sw, r.sh, 0, 0, c.width, c.height);
   return new Promise(ok => c.toBlob(ok, "image/jpeg", 0.9));
 }
+// Foto completa achicada (lado mayor 1280 px): junto con el recuadro, es el dato para entrenar el detector.
+function fotoChica() {
+  const k = Math.min(1, 1280 / Math.max(foto.width, foto.height)), c = document.createElement("canvas");
+  c.width = Math.round(foto.width * k); c.height = Math.round(foto.height * k);
+  const x = c.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(foto, 0, 0, c.width, c.height);
+  return new Promise(ok => c.toBlob(ok, "image/jpeg", 0.85));
+}
 function ponerCaja(c) {
   caja = c; const p = aPantalla(c);
   Object.assign($("caja").style, { left: p.x + "px", top: p.y + "px", width: p.w + "px", height: p.h + "px" }); $("caja").hidden = false;
 }
 async function disparar() {
   if (modo !== "vivo" || !sacarFoto()) return;
-  modo = "foto"; vid.pause();
+  modo = "foto"; vid.pause(); fotoBlob = null; fotoChica().then(b => fotoBlob = b);
   $("disparo").classList.add("pulsa"); setTimeout(() => $("disparo").classList.remove("pulsa"), 250);
   foto.hidden = false; requestAnimationFrame(() => foto.classList.add("si"));
   $("visor").classList.add("modoFoto");
@@ -378,7 +385,9 @@ function toast(t) { const e = $("toast"); e.textContent = t; e.classList.add("si
 async function guardar(valor) {
   if (!fijada || !caja) return;
   const rec = { id: Date.now(), equipo: equipo(), rol, sugerido: fijada.txt, confianza: +fijada.conf.toFixed(3), valor,
-    corregido: valor !== fijada.txt, fecha: new Date().toISOString(), modelo: tipoModelo(), ms: Math.round(fijada.ms), exportada: false, img: fijada.blob };
+    corregido: valor !== fijada.txt, fecha: new Date().toISOString(), modelo: tipoModelo(), ms: Math.round(fijada.ms), exportada: false, img: fijada.blob,
+    foto: fotoBlob || await fotoChica(),
+    caja: [caja.x / foto.width, caja.y / foto.height, caja.w / foto.width, caja.h / foto.height].map(v => +v.toFixed(4)) };
   await tx("lecturas", "readwrite", s => s.put(rec));
   toast(rec.corregido ? "Guardada con tu corrección ✓" : "Guardada ✓");
   contar(true); reiniciar();
@@ -445,12 +454,14 @@ const csvCampo = v => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""
 $("exportar").onclick = async () => {
   const L = (await todas()).filter(l => !l.exportada);
   if (!L.length) { toast("No hay lecturas nuevas para exportar"); return; }
-  const filas = [["recorte", "valor", "grupo", "equipo", "foto_original", "sugerido", "confianza", "corregido", "rol", "fecha", "modelo", "ms"]];
+  const filas = [["recorte", "valor", "grupo", "equipo", "foto_original", "sugerido", "confianza", "corregido", "rol", "fecha", "modelo", "ms", "foto", "caja_x", "caja_y", "caja_w", "caja_h"]];
   const arch = [];
   for (const l of L) {
     const nom = `c_${l.id}.jpg`;
     arch.push({ nombre: "recortes/" + nom, datos: new Uint8Array(await l.img.arrayBuffer()) });
-    filas.push([nom, l.valor, l.fecha.slice(0, 7), l.equipo, "celular", l.sugerido, l.confianza, l.corregido ? 1 : 0, l.rol, l.fecha, l.modelo, l.ms]);
+    let nf = "", cj = ["", "", "", ""];
+    if (l.foto) { nf = `f_${l.id}.jpg`; arch.push({ nombre: "fotos/" + nf, datos: new Uint8Array(await l.foto.arrayBuffer()) }); cj = l.caja; }
+    filas.push([nom, l.valor, l.fecha.slice(0, 7), l.equipo, "celular", l.sugerido, l.confianza, l.corregido ? 1 : 0, l.rol, l.fecha, l.modelo, l.ms, nf, ...cj]);
   }
   arch.unshift({ nombre: "etiquetas.csv", datos: new TextEncoder().encode(filas.map(f => f.map(csvCampo).join(",")).join("\n") + "\n") });
   const sello = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");

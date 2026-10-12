@@ -1,0 +1,3 @@
+Lector de campo (prototipo) · CaliField
+Subí TODO el contenido de esta carpeta (index.html y la carpeta modelos/) a un repositorio de GitHub
+y activá GitHub Pages. Las lecturas que guardás quedan solo en el teléfono; a GitHub no sube nada.

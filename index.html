@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111214">
+<title>Lector de campo · CaliField</title>
+<style>
+:root{--n:#FF7B00;--n2:#FF8D21;--co:#FF5E3A;--dur:#FFE6C4;--ok:#16a34a;--am:#F59E0B;--fondo:#111214;--p:#1d1e21;--p2:#25262a;--t2:#a5a5a5;
+  --ease:cubic-bezier(.2,.8,.2,1);--res:cubic-bezier(.34,1.56,.64,1)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--fondo);color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+button,input,select{font-family:inherit}
+.app{position:fixed;inset:0;display:flex;flex-direction:column}
+.cab{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top)) 14px 8px}
+.ico{width:34px;height:34px;border-radius:10px;background:#232425;flex-shrink:0}
+.ico svg{width:34px;height:34px;display:block}
+.cab div{flex:1;min-width:0}.cab b{display:block;font-size:15px}.cab small{color:var(--t2);font-size:12px}
+.chipN{background:var(--p2);border:none;color:#fff;border-radius:99px;padding:8px 12px;font-size:13px;font-weight:700;display:flex;gap:6px;align-items:center;transition:transform .3s var(--res)}
+.chipN:active{transform:scale(.94)}
+.chipN i{font-style:normal;background:var(--n);border-radius:99px;min-width:20px;padding:1px 6px;text-align:center;display:inline-block;transition:transform .35s var(--res)}
+.chipN i.pop{transform:scale(1.3)}
+.sel{display:flex;gap:8px;padding:0 14px 10px}
+.sel select,.sel input{flex:1;min-width:0;background:var(--p);border:1.5px solid #2c2d31;color:#fff;border-radius:12px;padding:10px;font-size:14px}
+.rol{display:flex;background:var(--p);border-radius:12px;padding:3px;position:relative;flex-shrink:0}
+.rol button{position:relative;z-index:1;background:none;border:none;color:#ddd;font-weight:700;font-size:13px;padding:8px 10px;width:80px}
+.rol .bola{position:absolute;top:3px;bottom:3px;left:3px;width:80px;border-radius:9px;background:linear-gradient(135deg,var(--n2),var(--co));transition:transform .35s var(--ease)}
+.rol.inst .bola{transform:translateX(80px)}
+.visor{position:relative;flex:1;min-height:0;overflow:hidden;background:#000}
+video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.sombra{position:absolute;inset:0;pointer-events:none}
+.guia{position:absolute;pointer-events:none;box-shadow:0 0 0 9999px rgba(0,0,0,.42);border-radius:10px;transition:transform .45s var(--res)}
+.guia.late{animation:late .5s var(--ease)}
+@keyframes late{50%{transform:scale(1.04)}}
+.guia i{position:absolute;width:24px;height:24px;border:3px solid #fff}
+.guia .a{left:-2px;top:-2px;border-right:0;border-bottom:0;border-radius:10px 0 0 0}.guia .b{right:-2px;top:-2px;border-left:0;border-bottom:0;border-radius:0 10px 0 0}
+.guia .c{left:-2px;bottom:-2px;border-right:0;border-top:0;border-radius:0 0 0 10px}.guia .d{right:-2px;bottom:-2px;border-left:0;border-top:0;border-radius:0 0 10px 0}
+.barre{position:absolute;left:8px;right:8px;top:0;height:30px;border-radius:6px;opacity:0;transition:opacity .3s;
+  background:linear-gradient(180deg,transparent,rgba(255,141,33,.25) 70%,rgba(255,141,33,.85) 96%,transparent)}
+.barre.si{opacity:1;animation:barre 1.3s ease-in-out infinite alternate}
+@keyframes barre{to{transform:translateY(var(--h))}}
+.estado{position:absolute;left:50%;top:12px;transform:translateX(-50%);display:flex;gap:8px;align-items:center;background:rgba(17,18,20,.75);
+  border-radius:99px;padding:7px 12px;font-size:12.5px;font-weight:600;white-space:nowrap}
+.estado .txt{transition:opacity .18s}
+.puntos{display:flex;gap:4px}.puntos i{width:7px;height:7px;border-radius:50%;background:#fff;opacity:.25;transform:scale(.7);transition:transform .35s var(--res),opacity .2s}
+.puntos i.si{opacity:1;transform:none;background:var(--n2)}.estado.ok .puntos i.si{background:#22c55e}
+.vivo{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);background:rgba(17,18,20,.75);border-radius:12px;padding:6px 12px;
+  font-family:ui-monospace,Menlo,monospace;font-size:22px;min-width:120px;text-align:center;transition:opacity .2s}
+.vivo small{display:block;font-family:system-ui;font-size:10.5px;color:var(--t2)}
+/* callout */
+.co{position:absolute;inset:0;pointer-events:none}
+.cor{position:absolute;height:9px;border:2px solid #fff;border-top:0;border-radius:0 0 4px 4px;transform:scaleX(0);transition:transform .3s var(--ease)}
+.lh,.ld{position:absolute;height:2px;background:#fff;transform-origin:0 50%;transform:scaleX(0);transition:transform .2s linear}
+.ld{transform:rotate(-45deg) scaleX(0)}
+.pt{position:absolute;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;border:2px solid #fff;background:rgba(17,18,20,.6);transform:scale(0);transition:transform .45s var(--res)}
+.pt::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--n2)}
+.chip{position:absolute;transform:translate(-100%,-50%) translateX(-10px);opacity:0;transition:opacity .25s,transform .35s var(--ease);
+  background:rgba(17,18,20,.88);border-radius:12px;padding:5px 9px;box-shadow:inset 0 0 0 1.5px var(--n2),0 6px 14px rgba(0,0,0,.35);white-space:nowrap;
+  font-family:ui-monospace,Menlo,monospace;font-size:16px}
+.chip small{font-family:system-ui;font-size:10px;color:var(--t2);margin-left:6px}
+.co.on .cor{transform:none}.co.on .lh{transform:scaleX(1);transition-delay:.18s}.co.on .ld{transform:rotate(-45deg) scaleX(1);transition-delay:.25s}
+.co.on .pt{transform:scale(1);transition-delay:.4s}.co.on .chip{opacity:1;transform:translate(-100%,-50%);transition-delay:.48s}
+/* panel inferior */
+.panel{padding:12px 14px calc(14px + env(safe-area-inset-bottom));background:var(--fondo)}
+.res{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.big{flex:1;font-family:ui-monospace,Menlo,monospace;font-size:38px;letter-spacing:.02em;transition:opacity .2s,transform .35s var(--ease)}
+.big.nuevo{animation:sube .4s var(--ease)}
+@keyframes sube{from{transform:translateY(8px);opacity:.2}to{transform:none;opacity:1}}
+.meta{text-align:right;font-size:12px;color:var(--t2);line-height:1.4}
+.aviso{font-size:12.5px;color:#FCD34D;background:rgba(245,158,11,.12);border-radius:12px;padding:8px 11px;margin-bottom:10px;display:none}
+.aviso.si{display:block;animation:sube .3s var(--ease)}
+.btns{display:flex;gap:8px}
+.bt{flex:1;border:none;border-radius:16px;padding:14px 10px;font-weight:700;font-size:14px;color:#e5e5e5;background:var(--p2);transition:transform .3s var(--res),opacity .2s}
+.bt:active{transform:scale(.95)}.bt[disabled]{opacity:.35;pointer-events:none}
+.mant{position:relative;overflow:hidden;flex:1.6;color:#fff;background:#2a2b2f}
+.mant .fill{position:absolute;inset:0;background:linear-gradient(135deg,#22c55e,#16a34a);transform-origin:0 50%;transform:scaleX(0)}
+.mant.carga .fill{transform:scaleX(1);transition:transform .7s linear}
+.mant span{position:relative}
+.corr{display:none;gap:8px;margin-top:8px}.corr.si{display:flex;animation:sube .3s var(--ease)}
+.corr input{flex:1;min-width:0;background:var(--p);border:1.5px solid var(--n2);color:#fff;border-radius:14px;padding:12px;font-size:20px;font-family:ui-monospace,Menlo,monospace}
+.corr .bt{flex:0 0 auto;padding:12px 16px;background:linear-gradient(135deg,var(--n2),var(--co));color:#fff}
+.toast{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translate(-50%,20px);opacity:0;background:#fff;color:#111;font-weight:700;
+  border-radius:99px;padding:9px 16px;font-size:13.5px;transition:transform .35s var(--res),opacity .25s;pointer-events:none;z-index:20;white-space:nowrap}
+.toast.si{transform:translate(-50%,0);opacity:1}
+/* hoja de datos */
+.velo{position:fixed;inset:0;background:rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .3s;z-index:10}.velo.si{opacity:1;pointer-events:auto}
+.hoja{position:fixed;left:0;right:0;bottom:0;max-height:86%;overflow:auto;background:#17181b;border-radius:24px 24px 0 0;z-index:11;
+  padding:16px 16px calc(20px + env(safe-area-inset-bottom));transform:translateY(102%);transition:transform .4s var(--ease)}
+.hoja.si{transform:none}
+.hoja h3{margin:0 0 4px;font-size:17px}.hoja p{color:var(--t2);font-size:13px;margin:0 0 12px;line-height:1.4}
+.tab{width:100%;border-collapse:collapse;font-size:13.5px;margin-bottom:14px}
+.tab td{padding:8px 4px;border-bottom:1px solid #26272b}.tab td:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
+.barra{height:6px;border-radius:9px;background:#2a2b2f;overflow:hidden;margin-top:4px}.barra i{display:block;height:100%;background:var(--ok);transform-origin:0 50%}
+.acc{display:flex;flex-direction:column;gap:8px}
+.acc .bt{text-align:left;padding:13px 14px}
+.acc .pr{background:linear-gradient(135deg,var(--n2),var(--co));color:#fff}
+.peligro{color:#fca5a5!important}
+.nota{font-size:11.5px;color:#777;margin-top:12px;line-height:1.4}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important;transition-delay:0s!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="cab">
+    <span class="ico" id="ico"></span>
+    <div><b>Lector de campo</b><small id="estModelo">Cargando modelo…</small></div>
+    <button class="chipN" id="abrirDatos">Datos <i id="nGuard">0</i></button>
+  </div>
+  <div class="sel">
+    <select id="equipo">
+      <option>SPMK700</option><option>KIMO MP 210</option><option>Vaisala HM70</option><option>Vaisala HMT330</option>
+      <option>Isotech</option><option>Mettler Toledo M200</option><option>Mettler Toledo M800</option><option>Veris</option>
+      <option>Presys</option><option>Balanza</option><option value="__otro">Otro…</option>
+    </select>
+    <input id="equipoOtro" placeholder="Equipo" style="display:none">
+    <div class="rol" id="rol"><span class="bola"></span><button data-r="patron">Patrón</button><button data-r="instrumento">UBP</button></div>
+  </div>
+  <div class="visor" id="visor">
+    <video id="video" playsinline muted autoplay></video>
+    <div class="guia" id="guia"><i class="a"></i><i class="b"></i><i class="c"></i><i class="d"></i><div class="barre" id="barre"></div></div>
+    <div class="co" id="co"></div>
+    <div class="estado" id="estado"><span class="txt" id="estTxt">Iniciando cámara…</span><span class="puntos"><i></i><i></i><i></i></span></div>
+    <div class="vivo" id="vivo">—<small>en vivo</small></div>
+  </div>
+  <div class="panel">
+    <div class="res"><div class="big" id="big">—</div><div class="meta" id="meta">Encuadrá solo los números<br>dentro del marco</div></div>
+    <div class="aviso" id="aviso"></div>
+    <div class="btns">
+      <button class="bt" id="reint">↻ Otra vez</button>
+      <button class="bt" id="escribir">✎ Corregir</button>
+      <button class="bt mant" id="ok" disabled><span class="fill"></span><span id="okTxt">Mantené para guardar</span></button>
+    </div>
+    <div class="corr" id="corr"><input id="corrIn" inputmode="decimal" placeholder="Valor correcto"><button class="bt" id="corrOk">Guardar</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="velo" id="velo"></div>
+<section class="hoja" id="hoja">
+  <h3>Datos para entrenar</h3>
+  <p id="resumen">—</p>
+  <table class="tab" id="tabla"></table>
+  <div class="acc">
+    <button class="bt pr" id="exportar">⇪ Exportar tanda (zip) para el Drive</button>
+    <label class="bt" id="lblModelo">⟳ Actualizar modelo (.onnx desde el Drive)<input type="file" id="archModelo" accept=".onnx" hidden></label>
+    <button class="bt" id="restaurar">↺ Volver a los modelos originales</button>
+    <button class="bt peligro" id="borrar">🗑 Borrar las ya exportadas</button>
+  </div>
+  <p class="nota">Las lecturas quedan guardadas en este teléfono hasta que las exportes y las borres vos. Nada se sube solo.<br>
+  Modelo general: <span id="infoG">—</span> · Especialista SPMK700: <span id="infoS">—</span></p>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
+<script>
+const CHARS = "-.0123456789", MW = 112, MH = 64, PROP = 2.35 / 1.45;
+const FORMATOS = { "SPMK700": 3 };                 // decimales fijos por equipo (se amplía con el tiempo)
+const $ = id => document.getElementById(id);
+const ICONO = `<svg viewBox="0 0 44 44" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M12 17v-2.5a2.5 2.5 0 0 1 2.5-2.5H17M27 12h2.5a2.5 2.5 0 0 1 2.5 2.5V17M12 27v2.5a2.5 2.5 0 0 0 2.5 2.5H17M32 27v2.5a2.5 2.5 0 0 1-2.5 2.5H27"/><circle cx="21" cy="21" r="3.7"/><path d="M23.8 23.8l2.6 2.6"/></svg>`;
+$("ico").innerHTML = ICONO;
+
+// ---------- Base local (IndexedDB) ----------
+let db;
+function abrirDB() {
+  return new Promise((ok, mal) => {
+    const r = indexedDB.open("lectorCampo", 1);
+    r.onupgradeneeded = () => { const d = r.result; d.createObjectStore("lecturas", { keyPath: "id" }); d.createObjectStore("modelos"); };
+    r.onsuccess = () => { db = r.result; ok(); }; r.onerror = () => mal(r.error);
+  });
+}
+const tx = (st, modo, fn) => new Promise((ok, mal) => { const t = db.transaction(st, modo); const res = fn(t.objectStore(st)); t.oncomplete = () => ok(res && res.result); t.onerror = () => mal(t.error); });
+const todas = () => new Promise(ok => { const out = []; db.transaction("lecturas").objectStore("lecturas").openCursor().onsuccess = e => { const c = e.target.result; if (c) { out.push(c.value); c.continue(); } else ok(out); }; });
+
+// ---------- Modelos ----------
+const sesiones = {};
+const ARCH = { general: "modelos/lector.onnx", spmk: "modelos/lector_spmk700.onnx" };
+async function sesion(tipo) {
+  if (sesiones[tipo]) return sesiones[tipo];
+  let buf = await tx("modelos", "readonly", s => s.get(tipo)), origen = "actualizado";
+  if (!buf) { buf = await (await fetch(ARCH[tipo])).arrayBuffer(); origen = "original"; }
+  ort.env.wasm.numThreads = 1;
+  const t0 = performance.now();
+  sesiones[tipo] = await ort.InferenceSession.create(buf, { executionProviders: ["wasm"] });
+  $(tipo === "general" ? "infoG" : "infoS").textContent = `${origen}, ${(buf.byteLength / 1048576).toFixed(1)} MB, cargó en ${Math.round(performance.now() - t0)} ms`;
+  return sesiones[tipo];
+}
+const equipo = () => $("equipo").value === "__otro" ? ($("equipoOtro").value.trim() || "Otro") : $("equipo").value;
+const tipoModelo = () => /SPMK/i.test(equipo()) ? "spmk" : "general";
+
+// ---------- Cámara y recorte ----------
+const vid = $("video");
+let rol = "patron";
+function ponerGuia() {
+  const v = $("visor").getBoundingClientRect(); const w = Math.min(v.width * 0.82, (v.height * 0.55) * PROP), h = w / PROP;
+  Object.assign($("guia").style, { width: w + "px", height: h + "px", left: (v.width - w) / 2 + "px", top: (v.height - h) / 2 + "px" });
+  $("barre").style.setProperty("--h", (h - 30) + "px");
+}
+addEventListener("resize", ponerGuia);
+const cRed = Object.assign(document.createElement("canvas"), { width: MW, height: MH });
+const cGuarda = document.createElement("canvas");
+function regionVideo() {   // la guía en píxeles reales del video (object-fit: cover)
+  const iw = vid.videoWidth, ih = vid.videoHeight; if (!iw) return null;
+  const v = $("visor").getBoundingClientRect(), g = $("guia").getBoundingClientRect();
+  const esc = Math.max(v.width / iw, v.height / ih), ox = (v.width - iw * esc) / 2, oy = (v.height - ih * esc) / 2;
+  return { sx: (g.left - v.left - ox) / esc, sy: (g.top - v.top - oy) / esc, sw: g.width / esc, sh: g.height / esc };
+}
+function tensor() {
+  const r = regionVideo(); if (!r) return null;
+  const x = cRed.getContext("2d", { willReadFrequently: true }); x.imageSmoothingQuality = "high";
+  x.drawImage(vid, r.sx, r.sy, r.sw, r.sh, 0, 0, MW, MH);
+  const d = x.getImageData(0, 0, MW, MH).data, a = new Float32Array(MW * MH); let s = 0, s2 = 0;
+  for (let i = 0; i < a.length; i++) { a[i] = (d[i*4] * 299 + d[i*4+1] * 587 + d[i*4+2] * 114) / 1000 / 255; s += a[i]; }
+  const m = s / a.length; for (let i = 0; i < a.length; i++) s2 += (a[i] - m) ** 2;
+  const sd = Math.sqrt(s2 / a.length) + 1e-5; for (let i = 0; i < a.length; i++) a[i] = (a[i] - m) / sd;
+  return a;
+}
+function capturar() {     // recorte para guardar: lo mismo que ve el modelo, a mejor resolución (como los del kit)
+  const r = regionVideo(); const k = Math.min(1, 480 / r.sw);
+  cGuarda.width = Math.round(r.sw * k); cGuarda.height = Math.round(r.sh * k);
+  const x = cGuarda.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(vid, r.sx, r.sy, r.sw, r.sh, 0, 0, cGuarda.width, cGuarda.height);
+  return new Promise(ok => cGuarda.toBlob(ok, "image/jpeg", 0.9));
+}
+async function leerUna() {
+  const a = tensor(); if (!a) return null;
+  const s = await sesion(tipoModelo()), t0 = performance.now();
+  const out = await s.run({ imagen: new ort.Tensor("float32", a, [1, 1, MH, MW]) });
+  const L = out.logits, T = L.dims[1], K = L.dims[2], z = L.data; let txt = "", prev = 0, conf = 1;
+  for (let t = 0; t < T; t++) {
+    let mx = -1e9, k = 0, sum = 0;
+    for (let j = 0; j < K; j++) if (z[t*K+j] > mx) { mx = z[t*K+j]; k = j; }
+    for (let j = 0; j < K; j++) sum += Math.exp(z[t*K+j] - mx);
+    if (k !== 0 && k !== prev) { txt += CHARS[k - 1]; conf = Math.min(conf, 1 / sum); }
+    prev = k;
+  }
+  return { txt, conf: txt ? conf : 0, ms: performance.now() - t0 };
+}
+
+// ---------- Ciclo de lectura ----------
+let modo = "buscando", ultimas = [], fijada = null, corriendo = false;
+const valido = t => /^-?\d+(\.\d+)?$/.test(t);
+function texto(t) { const s = $("estTxt"); if (s.textContent === t) return; s.style.opacity = 0; setTimeout(() => { s.textContent = t; s.style.opacity = 1; }, 160); }
+function puntos(n) { document.querySelectorAll(".puntos i").forEach((p, i) => p.classList.toggle("si", i < n)); }
+async function ciclo() {
+  if (corriendo) return; corriendo = true;
+  while (modo === "buscando") {
+    const t0 = performance.now();
+    const r = await leerUna().catch(e => { texto("Error: " + e.message); return null; });
+    if (r && modo === "buscando") {
+      $("vivo").firstChild.textContent = r.txt || "—";
+      const bueno = valido(r.txt) && r.conf >= 0.9;
+      ultimas.push(bueno ? r.txt : null); if (ultimas.length > 3) ultimas.shift();
+      let n = 0; for (let i = ultimas.length - 1; i >= 0 && ultimas[i] && ultimas[i] === ultimas[ultimas.length - 1]; i--) n++;
+      puntos(n); texto(n ? "Leyendo · cuadros iguales" : "Buscando números…");
+      if (n === 3) { fijar({ ...r }); break; }
+    }
+    await new Promise(ok => setTimeout(ok, Math.max(60, 220 - (performance.now() - t0))));
+  }
+  corriendo = false;
+}
+async function fijar(r) {
+  modo = "fijada"; fijada = { ...r, blob: await capturar() };
+  vid.pause(); $("barre").classList.remove("si"); $("estado").classList.add("ok"); texto("Lectura estable");
+  $("guia").classList.remove("late"); void $("guia").offsetWidth; $("guia").classList.add("late");
+  $("vivo").style.opacity = 0;
+  mostrar(r.txt, r.conf, r.ms); dibujarCallout(r);
+}
+function mostrar(txt, conf, ms) {
+  const b = $("big"); b.textContent = txt || "—"; b.classList.remove("nuevo"); void b.offsetWidth; b.classList.add("nuevo");
+  $("meta").innerHTML = `confianza ${Math.round(conf * 100)}%<br>${tipoModelo() === "spmk" ? "especialista SPMK" : "modelo general"} · ${Math.round(ms)} ms`;
+  const dec = FORMATOS[equipo()], dd = (txt.split(".")[1] || "").length, av = [];
+  if (dec != null && dd !== dec) av.push(`El ${equipo()} muestra ${dec} decimales y se leyeron ${dd}. Revisalo antes de guardar.`);
+  if (conf < .95) av.push(`Confianza ${Math.round(conf * 100)}%: mirá bien el display.`);
+  $("aviso").innerHTML = av.join("<br>"); $("aviso").classList.toggle("si", av.length > 0);
+  $("ok").disabled = false; $("okTxt").textContent = "Mantené para guardar";
+}
+function dibujarCallout(r) {
+  // Corchete debajo del marco (abre hacia los números), diagonal a 45° y punto con el chip del valor.
+  const v = $("visor").getBoundingClientRect(), g = $("guia").getBoundingClientRect();
+  const gx = g.left - v.left, gy = g.top - v.top, yU = gy + g.height + 10;
+  const fin = gx + g.width / 2 + 6, d = 28, cx = fin - d, cy = yU + d;
+  $("co").className = "co";
+  $("co").innerHTML = `<div class="cor" style="left:${gx + 10}px;top:${yU - 8}px;width:${g.width - 20}px"></div>
+    <div class="ld" style="left:${cx}px;top:${cy - 1}px;width:${d * Math.SQRT2}px"></div>
+    <div class="pt" style="left:${cx}px;top:${cy}px"></div>
+    <div class="chip" style="left:${cx - 16}px;top:${cy}px">${r.txt}<small>${Math.round(r.conf * 100)}%</small></div>`;
+  requestAnimationFrame(() => requestAnimationFrame(() => $("co").classList.add("on")));
+}
+function reiniciar() {
+  modo = "buscando"; ultimas = []; fijada = null; puntos(0);
+  $("co").className = "co"; setTimeout(() => { if (modo === "buscando") $("co").innerHTML = ""; }, 300);
+  $("estado").classList.remove("ok"); $("barre").classList.add("si"); $("vivo").style.opacity = 1;
+  $("big").textContent = "—"; $("meta").innerHTML = "Encuadrá solo los números<br>dentro del marco";
+  $("aviso").classList.remove("si"); $("corr").classList.remove("si"); $("ok").disabled = true;
+  vid.play().catch(() => {}); ciclo();
+}
+
+// ---------- Guardar ----------
+function toast(t) { const e = $("toast"); e.textContent = t; e.classList.add("si"); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove("si"), 1800); }
+async function guardar(valor) {
+  if (!fijada) return;
+  const rec = { id: Date.now(), equipo: equipo(), rol, sugerido: fijada.txt, confianza: +fijada.conf.toFixed(3), valor,
+    corregido: valor !== fijada.txt, fecha: new Date().toISOString(), modelo: tipoModelo(), ms: Math.round(fijada.ms), exportada: false, img: fijada.blob };
+  await tx("lecturas", "readwrite", s => s.put(rec));
+  toast(rec.corregido ? "Guardada con tu corrección ✓" : "Guardada ✓");
+  contar(true); reiniciar();
+}
+// Mantener presionado ~0,7 s para confirmar (evita guardar una lectura equivocada con un toque al pasar).
+const ok = $("ok");
+const soltar = () => ok.classList.remove("carga");
+ok.addEventListener("pointerdown", () => { if (!ok.disabled) ok.classList.add("carga"); });
+["pointerup", "pointerleave", "pointercancel"].forEach(e => ok.addEventListener(e, soltar));
+ok.querySelector(".fill").addEventListener("transitionend", () => { if (ok.classList.contains("carga")) { soltar(); guardar(fijada.txt); } });
+$("reint").onclick = reiniciar;
+$("escribir").onclick = async () => {
+  if (modo === "buscando") {     // sin lectura estable: congela el cuadro actual para cargarlo a mano
+    const r = await leerUna() || { txt: "", conf: 0, ms: 0 }; await fijar(r);
+  }
+  $("corr").classList.add("si"); $("corrIn").value = fijada.txt; $("corrIn").focus(); $("corrIn").select();
+};
+$("corrOk").onclick = () => {
+  const v = $("corrIn").value.trim().replace(",", ".");
+  if (!valido(v)) { toast("Solo números, punto y signo menos"); return; }
+  guardar(v);
+};
+
+// ---------- Hoja de datos ----------
+async function contar(pop) {
+  const L = await todas(); const n = L.filter(l => !l.exportada).length, e = $("nGuard");
+  e.textContent = n; if (pop) { e.classList.remove("pop"); void e.offsetWidth; e.classList.add("pop"); setTimeout(() => e.classList.remove("pop"), 300); }
+  return L;
+}
+async function abrirDatos() {
+  const L = await contar();
+  const por = {}; L.forEach(l => { const p = por[l.equipo] ||= { n: 0, ok: 0 }; p.n++; if (!l.corregido) p.ok++; });
+  const tot = L.length, bien = L.filter(l => !l.corregido).length, pend = L.filter(l => !l.exportada).length;
+  $("resumen").textContent = tot ? `${tot} lecturas guardadas (${pend} sin exportar). El modelo acertó ${bien} de ${tot} (${Math.round(100 * bien / tot)}%). Meta para los técnicos: 98%.` : "Todavía no guardaste lecturas.";
+  $("tabla").innerHTML = Object.entries(por).sort((a, b) => b[1].n - a[1].n).map(([k, p]) => {
+    const pc = Math.round(100 * p.ok / p.n);
+    return `<tr><td>${k}<div class="barra"><i style="transform:scaleX(${p.ok / p.n})"></i></div></td><td>${p.ok}/${p.n}</td><td>${pc}%</td></tr>`;
+  }).join("");
+  $("velo").classList.add("si"); $("hoja").classList.add("si");
+}
+const cerrarDatos = () => { $("velo").classList.remove("si"); $("hoja").classList.remove("si"); };
+$("abrirDatos").onclick = abrirDatos; $("velo").onclick = cerrarDatos;
+
+// Zip mínimo (sin compresión), para no depender de librerías.
+const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+const crc32 = b => { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+function zip(archivos) {
+  const enc = new TextEncoder(), partes = [], central = []; let off = 0;
+  for (const { nombre, datos } of archivos) {
+    const n = enc.encode(nombre), c = crc32(datos), h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint32(14, c, true);
+    h.setUint32(18, datos.length, true); h.setUint32(22, datos.length, true); h.setUint16(26, n.length, true);
+    partes.push(h, n, datos);
+    const cd = new DataView(new ArrayBuffer(46));
+    cd.setUint32(0, 0x02014b50, true); cd.setUint16(4, 20, true); cd.setUint16(6, 20, true); cd.setUint16(8, 0x0800, true); cd.setUint32(16, c, true);
+    cd.setUint32(20, datos.length, true); cd.setUint32(24, datos.length, true); cd.setUint16(28, n.length, true); cd.setUint32(42, off, true);
+    central.push(cd, n); off += 30 + n.length + datos.length;
+  }
+  const tam = central.reduce((s, x) => s + x.byteLength, 0), fin = new DataView(new ArrayBuffer(22));
+  fin.setUint32(0, 0x06054b50, true); fin.setUint16(8, archivos.length, true); fin.setUint16(10, archivos.length, true); fin.setUint32(12, tam, true); fin.setUint32(16, off, true);
+  return new Blob([...partes, ...central, fin], { type: "application/zip" });
+}
+const csvCampo = v => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
+$("exportar").onclick = async () => {
+  const L = (await todas()).filter(l => !l.exportada);
+  if (!L.length) { toast("No hay lecturas nuevas para exportar"); return; }
+  const filas = [["recorte", "valor", "grupo", "equipo", "foto_original", "sugerido", "confianza", "corregido", "rol", "fecha", "modelo", "ms"]];
+  const arch = [];
+  for (const l of L) {
+    const nom = `c_${l.id}.jpg`;
+    arch.push({ nombre: "recortes/" + nom, datos: new Uint8Array(await l.img.arrayBuffer()) });
+    filas.push([nom, l.valor, l.fecha.slice(0, 7), l.equipo, "celular", l.sugerido, l.confianza, l.corregido ? 1 : 0, l.rol, l.fecha, l.modelo, l.ms]);
+  }
+  arch.unshift({ nombre: "etiquetas.csv", datos: new TextEncoder().encode(filas.map(f => f.map(csvCampo).join(",")).join("\n") + "\n") });
+  const sello = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
+  const blob = zip(arch), nombre = `tanda_${sello}.zip`, file = new File([blob], nombre, { type: "application/zip" });
+  let compartido = false;
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: nombre }); compartido = true; } catch (e) { if (e.name === "AbortError") return; }
+  }
+  if (!compartido) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = nombre; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
+  await tx("lecturas", "readwrite", s => { L.forEach(l => s.put({ ...l, exportada: true })); });
+  toast(`Exportadas ${L.length} lecturas`); abrirDatos();
+};
+$("archModelo").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const tipo = /spmk/i.test(f.name) ? "spmk" : "general", buf = await f.arrayBuffer();
+  try { await ort.InferenceSession.create(buf, { executionProviders: ["wasm"] }); }
+  catch (err) { toast("Ese archivo no es un modelo válido"); return; }
+  await tx("modelos", "readwrite", s => s.put(buf, tipo)); delete sesiones[tipo]; await sesion(tipo);
+  toast(`Modelo ${tipo === "spmk" ? "especialista SPMK" : "general"} actualizado ✓`); e.target.value = "";
+};
+$("restaurar").onclick = async () => { await tx("modelos", "readwrite", s => s.clear()); for (const k in sesiones) delete sesiones[k]; await sesion("general"); await sesion("spmk"); toast("Modelos originales ✓"); };
+let armadoBorrar = 0;
+$("borrar").onclick = async () => {
+  const L = (await todas()).filter(l => l.exportada);
+  if (!L.length) { toast("No hay lecturas exportadas para borrar"); return; }
+  if (Date.now() - armadoBorrar > 3000) { armadoBorrar = Date.now(); $("borrar").textContent = `Tocá de nuevo para borrar ${L.length} (ya están en el zip)`; setTimeout(() => $("borrar").textContent = "🗑 Borrar las ya exportadas", 3000); return; }
+  await tx("lecturas", "readwrite", s => { L.forEach(l => s.delete(l.id)); }); armadoBorrar = 0;
+  $("borrar").textContent = "🗑 Borrar las ya exportadas"; toast(`Borradas ${L.length}`); abrirDatos();
+};
+
+// ---------- Selector de equipo y rol ----------
+$("equipo").onchange = () => { $("equipoOtro").style.display = $("equipo").value === "__otro" ? "" : "none"; try { localStorage.setItem("lc_equipo", $("equipo").value); } catch (e) {} ultimas = []; };
+document.querySelectorAll("#rol button").forEach(b => b.onclick = () => { rol = b.dataset.r; $("rol").classList.toggle("inst", rol === "instrumento"); });
+try { const e = localStorage.getItem("lc_equipo"); if (e) { $("equipo").value = e; $("equipo").onchange(); } } catch (e) {}
+
+// ---------- Arranque ----------
+(async () => {
+  ponerGuia();
+  try { await abrirDB(); contar(); } catch (e) { toast("No se pudo abrir el almacenamiento"); }
+  try { await navigator.storage?.persist?.(); } catch (e) {}
+  try {
+    const st = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+    vid.srcObject = st; await vid.play();
+  } catch (e) { texto("Sin cámara: " + e.message); return; }
+  try { await sesion(tipoModelo()); $("estModelo").textContent = "Modelo listo"; } catch (e) { $("estModelo").textContent = "No cargó el modelo: " + e.message; return; }
+  sesion(tipoModelo() === "spmk" ? "general" : "spmk").catch(() => {});
+  ponerGuia(); reiniciar();
+})();
+</script>
+</body>
+</html>

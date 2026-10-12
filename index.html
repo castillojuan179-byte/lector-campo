@@ -47,6 +47,21 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .vivo{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);background:rgba(17,18,20,.75);border-radius:12px;padding:6px 12px;
   font-family:ui-monospace,Menlo,monospace;font-size:22px;min-width:120px;text-align:center;transition:opacity .2s}
 .vivo small{display:block;font-family:system-ui;font-size:10.5px;color:var(--t2)}
+#foto{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;opacity:0;transition:opacity .25s}
+#foto.si{opacity:1}
+video{transform-origin:50% 50%;transition:transform .15s linear}
+.caja{position:absolute;border:2px solid var(--n2);border-radius:6px;box-shadow:0 0 0 9999px rgba(0,0,0,.32);pointer-events:none}
+.modoFoto .guia,.modoFoto .zoom,.modoFoto .disparo{opacity:0;pointer-events:none}
+.guia,.zoom,.disparo{transition:opacity .25s,transform .25s var(--res)}
+.guia{box-shadow:none}
+.disparo{position:absolute;left:50%;bottom:18px;width:74px;height:74px;margin-left:-37px;border-radius:50%;border:4px solid #fff;background:rgba(255,255,255,.18);padding:0}
+.disparo::after{content:"";position:absolute;inset:6px;border-radius:50%;background:#fff;transition:transform .2s var(--res)}
+.disparo:active::after,.disparo.pulsa::after{transform:scale(.82)}
+.zoom{position:absolute;left:50%;bottom:104px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:rgba(17,18,20,.6);border-radius:99px;padding:6px 12px;font-size:12px;font-weight:700;width:min(78%,320px)}
+.zoom input{flex:1;accent-color:var(--n2)}
+.vista{position:absolute;right:10px;top:52px;width:112px;height:64px;border-radius:6px;border:1.5px solid rgba(255,255,255,.8);opacity:0;transition:opacity .3s;pointer-events:none}
+.vista.si{opacity:1}
+.visor{touch-action:none}
 /* callout */
 .co{position:absolute;inset:0;pointer-events:none}
 .cor{position:absolute;height:9px;border:2px solid #fff;border-top:0;border-radius:0 0 4px 4px;transform:scaleX(0);transition:transform .3s var(--ease)}
@@ -117,16 +132,20 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
   </div>
   <div class="visor" id="visor">
     <video id="video" playsinline muted autoplay></video>
-    <div class="guia" id="guia"><i class="a"></i><i class="b"></i><i class="c"></i><i class="d"></i><div class="barre" id="barre"></div></div>
+    <canvas id="foto" hidden></canvas>
+    <div class="guia" id="guia"><i class="a"></i><i class="b"></i><i class="c"></i><i class="d"></i></div>
+    <div class="caja" id="caja" hidden></div>
     <div class="co" id="co"></div>
-    <div class="estado" id="estado"><span class="txt" id="estTxt">Iniciando cámara…</span><span class="puntos"><i></i><i></i><i></i></span></div>
-    <div class="vivo" id="vivo">—<small>en vivo</small></div>
+    <div class="estado" id="estado"><span class="txt" id="estTxt">Iniciando cámara…</span></div>
+    <canvas class="vista" id="vista" width="112" height="64"></canvas>
+    <div class="zoom" id="zoomBox"><span>−</span><input type="range" id="zoom" min="1" max="4" step="0.1" value="1"><span id="zoomTxt">1×</span></div>
+    <button class="disparo" id="disparo" aria-label="Sacar foto"></button>
   </div>
   <div class="panel">
-    <div class="res"><div class="big" id="big">—</div><div class="meta" id="meta">Encuadrá solo los números<br>dentro del marco</div></div>
+    <div class="res"><div class="big" id="big">—</div><div class="meta" id="meta">Encuadrá los números en el marco<br>y sacá la foto</div></div>
     <div class="aviso" id="aviso"></div>
     <div class="btns">
-      <button class="bt" id="reint">↻ Otra vez</button>
+      <button class="bt" id="reint">↺ Otra foto</button>
       <button class="bt" id="escribir">✎ Corregir</button>
       <button class="bt mant" id="ok" disabled><span class="fill"></span><span id="okTxt">Mantené para guardar</span></button>
     </div>
@@ -190,42 +209,64 @@ async function sesion(tipo) {
 const equipo = () => $("equipo").value === "__otro" ? ($("equipoOtro").value.trim() || "Otro") : $("equipo").value;
 const tipoModelo = () => /SPMK/i.test(equipo()) ? "spmk" : "general";
 
-// ---------- Cámara y recorte ----------
-const vid = $("video");
-let rol = "patron";
+// ---------- Cámara (modo foto) ----------
+const valido = t => /^-?\d+(\.\d+)?$/.test(t);
+const vid = $("video"), foto = $("foto");
+const MARG = { i: .42, d: .32, a: .49, b: .47 };   // márgenes alrededor de los números: los mismos de todos los recortes de entrenamiento
+const ASPECTO_NUM = 1.83;                            // proporción típica de un renglón de números
+let rol = "patron", modo = "vivo", zoomHW = false, zoomDig = 1, caja = null, fijada = null, leyendo = 0;
 function ponerGuia() {
-  const v = $("visor").getBoundingClientRect(); const w = Math.min(v.width * 0.82, (v.height * 0.55) * PROP), h = w / PROP;
-  Object.assign($("guia").style, { width: w + "px", height: h + "px", left: (v.width - w) / 2 + "px", top: (v.height - h) / 2 + "px" });
-  $("barre").style.setProperty("--h", (h - 30) + "px");
+  const v = $("visor").getBoundingClientRect(), w = Math.min(v.width * 0.5, v.height * 0.45 * ASPECTO_NUM), h = w / ASPECTO_NUM;
+  Object.assign($("guia").style, { width: w + "px", height: h + "px", left: (v.width - w) / 2 + "px", top: (v.height - h) / 2 - 30 + "px" });
 }
 addEventListener("resize", ponerGuia);
-const cRed = Object.assign(document.createElement("canvas"), { width: MW, height: MH });
-const cGuarda = document.createElement("canvas");
-function regionVideo() {   // la guía en píxeles reales del video (object-fit: cover)
-  const iw = vid.videoWidth, ih = vid.videoHeight; if (!iw) return null;
-  const v = $("visor").getBoundingClientRect(), g = $("guia").getBoundingClientRect();
-  const esc = Math.max(v.width / iw, v.height / ih), ox = (v.width - iw * esc) / 2, oy = (v.height - ih * esc) / 2;
-  return { sx: (g.left - v.left - ox) / esc, sy: (g.top - v.top - oy) / esc, sw: g.width / esc, sh: g.height / esc };
+function iniciarZoom() {
+  const tr = vid.srcObject && vid.srcObject.getVideoTracks()[0], z = $("zoom");
+  const cap = tr && tr.getCapabilities ? tr.getCapabilities() : {};
+  if (cap.zoom && cap.zoom.max > cap.zoom.min) {
+    zoomHW = true; z.min = cap.zoom.min; z.max = Math.min(cap.zoom.max, 10); z.step = cap.zoom.step || 0.1; z.value = (tr.getSettings().zoom || cap.zoom.min);
+  } else { z.min = 1; z.max = 4; z.step = 0.1; z.value = 1; }
+  const poner = () => {
+    const val = +z.value; $("zoomTxt").textContent = val.toFixed(1) + "×";
+    if (zoomHW) tr.applyConstraints({ advanced: [{ zoom: val }] }).catch(() => {});
+    else { zoomDig = val; vid.style.transform = `scale(${val})`; }
+  };
+  z.oninput = poner; poner();
 }
-function tensor() {
-  const r = regionVideo(); if (!r) return null;
+function texto(t) { const s = $("estTxt"); if (texto.ult === t) return; texto.ult = t; s.style.opacity = 0; clearTimeout(texto.tm); texto.tm = setTimeout(() => { s.textContent = t; s.style.opacity = 1; }, 160); }
+// Saca la foto de lo que se ve en pantalla (mismo encuadre), a la resolución del sensor.
+function sacarFoto() {
+  const iw = vid.videoWidth, ih = vid.videoHeight; if (!iw) return false;
+  const v = $("visor").getBoundingClientRect(), esc = Math.max(v.width / iw, v.height / ih) * zoomDig;
+  const sw = v.width / esc, sh = v.height / esc, sx = (iw - sw) / 2, sy = (ih - sh) / 2;
+  foto.width = Math.round(sw); foto.height = Math.round(sh);
+  foto.getContext("2d").drawImage(vid, sx, sy, sw, sh, 0, 0, foto.width, foto.height);
+  return true;
+}
+// Foto mostrada con object-fit: contain. Se recalcula siempre, porque el visor cambia de alto cuando aparecen avisos.
+function mapa() {
+  const v = $("visor").getBoundingClientRect(), s = Math.min(v.width / foto.width, v.height / foto.height);
+  return { s, ox: (v.width - foto.width * s) / 2, oy: (v.height - foto.height * s) / 2, v };
+}
+const aPantalla = c => { const m = mapa(); return { x: m.ox + c.x * m.s, y: m.oy + c.y * m.s, w: c.w * m.s, h: c.h * m.s }; };
+const aFoto = (x, y) => { const m = mapa(); return { x: (x - m.ox) / m.s, y: (y - m.oy) / m.s }; };
+function regionMargen(c, f = 1) {
+  const x0 = Math.max(0, c.x - MARG.i * c.w * f), y0 = Math.max(0, c.y - MARG.a * c.h * f);
+  const x1 = Math.min(foto.width, c.x + c.w + MARG.d * c.w * f), y1 = Math.min(foto.height, c.y + c.h + MARG.b * c.h * f);
+  return { sx: x0, sy: y0, sw: x1 - x0, sh: y1 - y0 };
+}
+const cRed = Object.assign(document.createElement("canvas"), { width: MW, height: MH });
+function tensorDe(r) {
   const x = cRed.getContext("2d", { willReadFrequently: true }); x.imageSmoothingQuality = "high";
-  x.drawImage(vid, r.sx, r.sy, r.sw, r.sh, 0, 0, MW, MH);
+  x.drawImage(foto, r.sx, r.sy, r.sw, r.sh, 0, 0, MW, MH);
   const d = x.getImageData(0, 0, MW, MH).data, a = new Float32Array(MW * MH); let s = 0, s2 = 0;
   for (let i = 0; i < a.length; i++) { a[i] = (d[i*4] * 299 + d[i*4+1] * 587 + d[i*4+2] * 114) / 1000 / 255; s += a[i]; }
   const m = s / a.length; for (let i = 0; i < a.length; i++) s2 += (a[i] - m) ** 2;
   const sd = Math.sqrt(s2 / a.length) + 1e-5; for (let i = 0; i < a.length; i++) a[i] = (a[i] - m) / sd;
   return a;
 }
-function capturar() {     // recorte para guardar: lo mismo que ve el modelo, a mejor resolución (como los del kit)
-  const r = regionVideo(); const k = Math.min(1, 480 / r.sw);
-  cGuarda.width = Math.round(r.sw * k); cGuarda.height = Math.round(r.sh * k);
-  const x = cGuarda.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(vid, r.sx, r.sy, r.sw, r.sh, 0, 0, cGuarda.width, cGuarda.height);
-  return new Promise(ok => cGuarda.toBlob(ok, "image/jpeg", 0.9));
-}
-async function leerUna() {
-  const a = tensor(); if (!a) return null;
-  const s = await sesion(tipoModelo()), t0 = performance.now();
+async function inferir(a) {
+  const s = await sesion(tipoModelo());
   const out = await s.run({ imagen: new ort.Tensor("float32", a, [1, 1, MH, MW]) });
   const L = out.logits, T = L.dims[1], K = L.dims[2], z = L.data; let txt = "", prev = 0, conf = 1;
   for (let t = 0; t < T; t++) {
@@ -235,72 +276,107 @@ async function leerUna() {
     if (k !== 0 && k !== prev) { txt += CHARS[k - 1]; conf = Math.min(conf, 1 / sum); }
     prev = k;
   }
-  return { txt, conf: txt ? conf : 0, ms: performance.now() - t0 };
+  return { txt, conf: txt ? conf : 0 };
 }
-
-// ---------- Ciclo de lectura ----------
-let modo = "buscando", ultimas = [], fijada = null, corriendo = false;
-const valido = t => /^-?\d+(\.\d+)?$/.test(t);
-function texto(t) { const s = $("estTxt"); if (s.textContent === t) return; s.style.opacity = 0; setTimeout(() => { s.textContent = t; s.style.opacity = 1; }, 160); }
-function puntos(n) { document.querySelectorAll(".puntos i").forEach((p, i) => p.classList.toggle("si", i < n)); }
-async function ciclo() {
-  if (corriendo) return; corriendo = true;
-  while (modo === "buscando") {
-    const t0 = performance.now();
-    const r = await leerUna().catch(e => { texto("Error: " + e.message); return null; });
-    if (r && modo === "buscando") {
-      $("vivo").firstChild.textContent = r.txt || "—";
-      const bueno = valido(r.txt) && r.conf >= 0.9;
-      ultimas.push(bueno ? r.txt : null); if (ultimas.length > 3) ultimas.shift();
-      let n = 0; for (let i = ultimas.length - 1; i >= 0 && ultimas[i] && ultimas[i] === ultimas[ultimas.length - 1]; i--) n++;
-      puntos(n); texto(n ? "Leyendo · cuadros iguales" : "Buscando números…");
-      if (n === 3) { fijar({ ...r }); break; }
-    }
-    await new Promise(ok => setTimeout(ok, Math.max(60, 220 - (performance.now() - t0))));
+// Lee el recuadro 3 veces con márgenes un poco distintos y se queda con lo que más se repite:
+// si el recuadro no quedó perfecto, la lectura no depende de unos píxeles.
+async function leerCaja() {
+  if (!caja) return; const yo = ++leyendo, t0 = performance.now();
+  texto("Leyendo…");
+  const res = [];
+  for (const f of [1, 0.8, 1.2]) res.push(await inferir(tensorDe(regionMargen(caja, f))));
+  if (yo !== leyendo) return;
+  const votos = {}; res.forEach(r => { if (!r.txt) return; (votos[r.txt] ||= []).push(r.conf); });
+  let mejor = { txt: "", conf: 0 };
+  for (const [t, cs] of Object.entries(votos)) {
+    const sc = cs.length + Math.max(...cs) / 10;
+    if (!mejor.sc || sc > mejor.sc) mejor = { txt: t, conf: cs.reduce((a, b) => a + b, 0) / cs.length * (cs.length / res.length), sc };
   }
-  corriendo = false;
+  const ms = performance.now() - t0;
+  // vista de lo que entra a la red
+  const vc = $("vista").getContext("2d"); vc.drawImage(foto, ...Object.values(regionMargen(caja)), 0, 0, MW, MH); $("vista").classList.add("si");
+  fijada = { txt: mejor.txt, conf: mejor.conf, ms, blob: await recorteGuardar() };
+  texto(mejor.txt ? "Si el recuadro no está justo, marcalo con el dedo" : "No leí nada: marcá los números con el dedo");
+  mostrar(mejor.txt, mejor.conf, ms); dibujarCallout(mejor, aPantalla(caja));
 }
-async function fijar(r) {
-  modo = "fijada"; fijada = { ...r, blob: await capturar() };
-  vid.pause(); $("barre").classList.remove("si"); $("estado").classList.add("ok"); texto("Lectura estable");
-  $("guia").classList.remove("late"); void $("guia").offsetWidth; $("guia").classList.add("late");
-  $("vivo").style.opacity = 0;
-  mostrar(r.txt, r.conf, r.ms); dibujarCallout(r);
+function recorteGuardar() {
+  const r = regionMargen(caja), k = Math.min(1, 480 / r.sw), c = document.createElement("canvas");
+  c.width = Math.round(r.sw * k); c.height = Math.round(r.sh * k);
+  const x = c.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(foto, r.sx, r.sy, r.sw, r.sh, 0, 0, c.width, c.height);
+  return new Promise(ok => c.toBlob(ok, "image/jpeg", 0.9));
 }
+function ponerCaja(c) {
+  caja = c; const p = aPantalla(c);
+  Object.assign($("caja").style, { left: p.x + "px", top: p.y + "px", width: p.w + "px", height: p.h + "px" }); $("caja").hidden = false;
+}
+async function disparar() {
+  if (modo !== "vivo" || !sacarFoto()) return;
+  modo = "foto"; vid.pause();
+  $("disparo").classList.add("pulsa"); setTimeout(() => $("disparo").classList.remove("pulsa"), 250);
+  foto.hidden = false; requestAnimationFrame(() => foto.classList.add("si"));
+  $("visor").classList.add("modoFoto");
+  // Propuesta inicial: el marco guía, en píxeles de la foto.
+  const v = $("visor").getBoundingClientRect(), g = $("guia").getBoundingClientRect();
+  const p0 = aFoto(g.left - v.left, g.top - v.top), p1 = aFoto(g.right - v.left, g.bottom - v.top);
+  ponerCaja({ x: p0.x, y: p0.y, w: p1.x - p0.x, h: p1.y - p0.y });
+  await leerCaja();
+}
+// Marcar los números con el dedo sobre la foto quieta.
+let arrastre = null;
+$("visor").addEventListener("pointerdown", e => {
+  if (modo !== "foto" || e.target.closest("button,input")) return;
+  const v = $("visor").getBoundingClientRect(); arrastre = { x0: e.clientX - v.left, y0: e.clientY - v.top };
+  $("visor").setPointerCapture(e.pointerId);
+});
+$("visor").addEventListener("pointermove", e => {
+  if (!arrastre) return; const v = $("visor").getBoundingClientRect();
+  const x1 = e.clientX - v.left, y1 = e.clientY - v.top;
+  const r = { x: Math.min(arrastre.x0, x1), y: Math.min(arrastre.y0, y1), w: Math.abs(x1 - arrastre.x0), h: Math.abs(y1 - arrastre.y0) };
+  if (r.w > 6 && r.h > 6) {
+    const a = aFoto(r.x, r.y), b = aFoto(r.x + r.w, r.y + r.h);
+    $("co").className = "co"; ponerCaja({ x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y }); arrastre.mov = true;
+  }
+});
+// Si el visor cambia de tamaño (avisos, teclado), se reacomodan el recuadro y el callout.
+new ResizeObserver(() => { if (modo === "foto" && caja) { ponerCaja(caja); if (fijada) dibujarCallout(fijada, aPantalla(caja)); } }).observe($("visor"));
+const finArrastre = () => { if (arrastre && arrastre.mov && caja) leerCaja(); arrastre = null; };
+$("visor").addEventListener("pointerup", finArrastre); $("visor").addEventListener("pointercancel", finArrastre);
+
 function mostrar(txt, conf, ms) {
   const b = $("big"); b.textContent = txt || "—"; b.classList.remove("nuevo"); void b.offsetWidth; b.classList.add("nuevo");
   $("meta").innerHTML = `confianza ${Math.round(conf * 100)}%<br>${tipoModelo() === "spmk" ? "especialista SPMK" : "modelo general"} · ${Math.round(ms)} ms`;
   const dec = FORMATOS[equipo()], dd = (txt.split(".")[1] || "").length, av = [];
-  if (dec != null && dd !== dec) av.push(`El ${equipo()} muestra ${dec} decimales y se leyeron ${dd}. Revisalo antes de guardar.`);
-  if (conf < .95) av.push(`Confianza ${Math.round(conf * 100)}%: mirá bien el display.`);
+  if (txt && dec != null && dd !== dec) av.push(`El ${equipo()} muestra ${dec} decimales y se leyeron ${dd}. Revisalo antes de guardar.`);
+  if (txt && conf < .95) av.push(`Confianza ${Math.round(conf * 100)}%: mirá bien el display.`);
   $("aviso").innerHTML = av.join("<br>"); $("aviso").classList.toggle("si", av.length > 0);
-  $("ok").disabled = false; $("okTxt").textContent = "Mantené para guardar";
+  $("ok").disabled = !valido(txt); $("okTxt").textContent = valido(txt) ? "Mantené para guardar" : "Usá Corregir";
 }
-function dibujarCallout(r) {
-  // Corchete debajo del marco (abre hacia los números), diagonal a 45° y punto con el chip del valor.
-  const v = $("visor").getBoundingClientRect(), g = $("guia").getBoundingClientRect();
-  const gx = g.left - v.left, gy = g.top - v.top, yU = gy + g.height + 10;
-  const fin = gx + g.width / 2 + 6, d = 28, cx = fin - d, cy = yU + d;
+function dibujarCallout(r, p) {
+  // Corchete debajo del recuadro, diagonal a 45° y punto con el chip del valor.
+  const v = $("visor").getBoundingClientRect(), yU = Math.min(p.y + p.h + 10, v.height - 70);
+  const fin = p.x + p.w / 2 + 6, d = 28, cx = fin - d, cy = yU + d;
   $("co").className = "co";
-  $("co").innerHTML = `<div class="cor" style="left:${gx + 10}px;top:${yU - 8}px;width:${g.width - 20}px"></div>
+  if (!r.txt) { $("co").innerHTML = ""; return; }
+  $("co").innerHTML = `<div class="cor" style="left:${p.x + 4}px;top:${yU - 8}px;width:${Math.max(10, p.w - 8)}px"></div>
     <div class="ld" style="left:${cx}px;top:${cy - 1}px;width:${d * Math.SQRT2}px"></div>
     <div class="pt" style="left:${cx}px;top:${cy}px"></div>
     <div class="chip" style="left:${cx - 16}px;top:${cy}px">${r.txt}<small>${Math.round(r.conf * 100)}%</small></div>`;
   requestAnimationFrame(() => requestAnimationFrame(() => $("co").classList.add("on")));
 }
 function reiniciar() {
-  modo = "buscando"; ultimas = []; fijada = null; puntos(0);
-  $("co").className = "co"; setTimeout(() => { if (modo === "buscando") $("co").innerHTML = ""; }, 300);
-  $("estado").classList.remove("ok"); $("barre").classList.add("si"); $("vivo").style.opacity = 1;
-  $("big").textContent = "—"; $("meta").innerHTML = "Encuadrá solo los números<br>dentro del marco";
+  leyendo++; modo = "vivo"; caja = null; fijada = null;
+  $("co").className = "co"; $("caja").hidden = true; $("vista").classList.remove("si");
+  foto.classList.remove("si"); setTimeout(() => { if (modo === "vivo") foto.hidden = true; }, 300);
+  $("visor").classList.remove("modoFoto");
+  $("big").textContent = "—"; $("meta").innerHTML = "Encuadrá los números en el marco<br>y sacá la foto";
   $("aviso").classList.remove("si"); $("corr").classList.remove("si"); $("ok").disabled = true;
-  vid.play().catch(() => {}); ciclo();
+  texto("Apuntá y sacá la foto"); vid.play().catch(() => {});
 }
 
 // ---------- Guardar ----------
 function toast(t) { const e = $("toast"); e.textContent = t; e.classList.add("si"); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove("si"), 1800); }
 async function guardar(valor) {
-  if (!fijada) return;
+  if (!fijada || !caja) return;
   const rec = { id: Date.now(), equipo: equipo(), rol, sugerido: fijada.txt, confianza: +fijada.conf.toFixed(3), valor,
     corregido: valor !== fijada.txt, fecha: new Date().toISOString(), modelo: tipoModelo(), ms: Math.round(fijada.ms), exportada: false, img: fijada.blob };
   await tx("lecturas", "readwrite", s => s.put(rec));
@@ -314,10 +390,10 @@ ok.addEventListener("pointerdown", () => { if (!ok.disabled) ok.classList.add("c
 ["pointerup", "pointerleave", "pointercancel"].forEach(e => ok.addEventListener(e, soltar));
 ok.querySelector(".fill").addEventListener("transitionend", () => { if (ok.classList.contains("carga")) { soltar(); guardar(fijada.txt); } });
 $("reint").onclick = reiniciar;
+$("disparo").onclick = disparar;
 $("escribir").onclick = async () => {
-  if (modo === "buscando") {     // sin lectura estable: congela el cuadro actual para cargarlo a mano
-    const r = await leerUna() || { txt: "", conf: 0, ms: 0 }; await fijar(r);
-  }
+  if (modo === "vivo") await disparar();
+  if (!fijada) return;
   $("corr").classList.add("si"); $("corrIn").value = fijada.txt; $("corrIn").focus(); $("corrIn").select();
 };
 $("corrOk").onclick = () => {
@@ -406,7 +482,7 @@ $("borrar").onclick = async () => {
 };
 
 // ---------- Selector de equipo y rol ----------
-$("equipo").onchange = () => { $("equipoOtro").style.display = $("equipo").value === "__otro" ? "" : "none"; try { localStorage.setItem("lc_equipo", $("equipo").value); } catch (e) {} ultimas = []; };
+$("equipo").onchange = () => { $("equipoOtro").style.display = $("equipo").value === "__otro" ? "" : "none"; try { localStorage.setItem("lc_equipo", $("equipo").value); } catch (e) {} if (modo === "foto" && caja) leerCaja(); };
 document.querySelectorAll("#rol button").forEach(b => b.onclick = () => { rol = b.dataset.r; $("rol").classList.toggle("inst", rol === "instrumento"); });
 try { const e = localStorage.getItem("lc_equipo"); if (e) { $("equipo").value = e; $("equipo").onchange(); } } catch (e) {}
 
@@ -416,12 +492,12 @@ try { const e = localStorage.getItem("lc_equipo"); if (e) { $("equipo").value = 
   try { await abrirDB(); contar(); } catch (e) { toast("No se pudo abrir el almacenamiento"); }
   try { await navigator.storage?.persist?.(); } catch (e) {}
   try {
-    const st = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+    const st = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 3840 }, height: { ideal: 2160 } }, audio: false });
     vid.srcObject = st; await vid.play();
   } catch (e) { texto("Sin cámara: " + e.message); return; }
   try { await sesion(tipoModelo()); $("estModelo").textContent = "Modelo listo"; } catch (e) { $("estModelo").textContent = "No cargó el modelo: " + e.message; texto("Sin modelo"); return; }
   sesion(tipoModelo() === "spmk" ? "general" : "spmk").catch(() => {});
-  ponerGuia(); reiniciar();
+  ponerGuia(); iniciarZoom(); reiniciar();
 })();
 </script>
 </body>

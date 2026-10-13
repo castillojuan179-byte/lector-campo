@@ -94,6 +94,16 @@ video{transform-origin:50% 50%;transition:transform .15s linear}
 .corr{display:none;gap:8px;margin-top:8px}.corr.si{display:flex;animation:sube .3s var(--ease)}
 .corr input{flex:1;min-width:0;background:var(--p);border:1.5px solid var(--n2);color:#fff;border-radius:14px;padding:12px;font-size:20px;font-family:ui-monospace,Menlo,monospace}
 .corr .bt{flex:0 0 auto;padding:12px 16px;background:linear-gradient(135deg,var(--n2),var(--co));color:#fff}
+/* marca "más de un valor" (solo con la foto quieta) */
+.multi{display:none;align-items:center;gap:10px;width:100%;margin-bottom:10px;background:var(--p);border:none;border-radius:14px;padding:10px 12px;color:#ddd;font-size:13px;font-weight:600;text-align:left;transition:transform .3s var(--res)}
+.multi:active{transform:scale(.98)}
+.panel.foto .multi{display:flex;animation:sube .3s var(--ease)}
+.multi span{flex:1}.multi small{display:block;font-size:11px;font-weight:500;color:var(--t2);margin-top:1px}
+.sw{position:relative;flex-shrink:0;width:42px;height:24px;border-radius:99px;background:#3a3b40;overflow:hidden}
+.sw::before{content:"";position:absolute;inset:0;border-radius:99px;background:linear-gradient(135deg,var(--n2),var(--co));opacity:0;transition:opacity .25s}
+.sw::after{content:"";position:absolute;left:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .3s var(--res)}
+.multi.si .sw::before{opacity:1}.multi.si .sw::after{transform:translateX(18px)}
+.multi.si{color:#fff}
 .toast{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translate(-50%,20px);opacity:0;background:#fff;color:#111;font-weight:700;
   border-radius:99px;padding:9px 16px;font-size:13.5px;transition:transform .35s var(--res),opacity .25s;pointer-events:none;z-index:20;white-space:nowrap}
 .toast.si{transform:translate(-50%,0);opacity:1}
@@ -118,7 +128,7 @@ video{transform-origin:50% 50%;transition:transform .15s linear}
 <div class="app">
   <div class="cab">
     <span class="ico" id="ico"></span>
-    <div><b>Lector de campo <span style="font-size:11px;color:#FF8D21;font-weight:700">v3 · cámara + recuadros</span></b><small id="estModelo">Cargando modelo…</small></div>
+    <div><b>Lector de campo <span style="font-size:11px;color:#FF8D21;font-weight:700">v3.1 · cámara + recuadros</span></b><small id="estModelo">Cargando modelo…</small></div>
     <button class="chipN" id="abrirDatos">Datos <i id="nGuard">0</i></button>
   </div>
   <div class="sel">
@@ -141,9 +151,10 @@ video{transform-origin:50% 50%;transition:transform .15s linear}
     <div class="zoom" id="zoomBox"><span>−</span><input type="range" id="zoom" min="1" max="4" step="0.1" value="1"><span id="zoomTxt">1×</span></div>
     <button class="disparo" id="disparo" aria-label="Sacar foto"></button>
   </div>
-  <div class="panel">
+  <div class="panel" id="panel">
     <div class="res"><div class="big" id="big">—</div><div class="meta" id="meta">Encuadrá los números en el marco<br>y sacá la foto</div></div>
     <div class="aviso" id="aviso"></div>
+    <button class="multi" id="multi" aria-pressed="false"><span>El display muestra más de un valor<small>Se recuerda por equipo</small></span><i class="sw"></i></button>
     <div class="btns">
       <button class="bt" id="reint">↺ Otra foto</button>
       <button class="bt" id="escribir">✎ Corregir</button>
@@ -208,6 +219,16 @@ async function sesion(tipo) {
 }
 const equipo = () => $("equipo").value === "__otro" ? ($("equipoOtro").value.trim() || "Otro") : $("equipo").value;
 const tipoModelo = () => /SPMK/i.test(equipo()) ? "spmk" : "general";
+
+// ---------- Marca "más de un valor" ----------
+// Se recuerda por equipo (un M800 casi siempre muestra dos valores), pero siempre se ve y se puede cambiar en cada foto.
+let multi = false;
+const claveMulti = () => "lc_multi_" + equipo();
+function ponerMulti(v, recordar) {
+  multi = !!v; $("multi").classList.toggle("si", multi); $("multi").setAttribute("aria-pressed", multi);
+  if (recordar) try { localStorage.setItem(claveMulti(), multi ? "1" : "0"); } catch (e) {}
+}
+function cargarMulti() { let v = false; try { v = localStorage.getItem(claveMulti()) === "1"; } catch (e) {} ponerMulti(v, false); }
 
 // ---------- Cámara (modo foto) ----------
 const valido = t => /^-?\d+(\.\d+)?$/.test(t);
@@ -321,7 +342,7 @@ async function disparar() {
   modo = "foto"; vid.pause(); fotoBlob = null; fotoChica().then(b => fotoBlob = b);
   $("disparo").classList.add("pulsa"); setTimeout(() => $("disparo").classList.remove("pulsa"), 250);
   foto.hidden = false; requestAnimationFrame(() => foto.classList.add("si"));
-  $("visor").classList.add("modoFoto");
+  $("visor").classList.add("modoFoto"); $("panel").classList.add("foto");
   // Propuesta inicial: el marco guía, en píxeles de la foto.
   const v = $("visor").getBoundingClientRect(), g = $("guia").getBoundingClientRect();
   const p0 = aFoto(g.left - v.left, g.top - v.top), p1 = aFoto(g.right - v.left, g.bottom - v.top);
@@ -374,7 +395,7 @@ function reiniciar() {
   leyendo++; modo = "vivo"; caja = null; fijada = null;
   $("co").className = "co"; $("caja").hidden = true; $("vista").classList.remove("si");
   foto.classList.remove("si"); setTimeout(() => { if (modo === "vivo") foto.hidden = true; }, 300);
-  $("visor").classList.remove("modoFoto");
+  $("visor").classList.remove("modoFoto"); $("panel").classList.remove("foto");
   $("big").textContent = "—"; $("meta").innerHTML = "Encuadrá los números en el marco<br>y sacá la foto";
   $("aviso").classList.remove("si"); $("corr").classList.remove("si"); $("ok").disabled = true;
   texto("Apuntá y sacá la foto"); vid.play().catch(() => {});
@@ -385,7 +406,7 @@ function toast(t) { const e = $("toast"); e.textContent = t; e.classList.add("si
 async function guardar(valor) {
   if (!fijada || !caja) return;
   const rec = { id: Date.now(), equipo: equipo(), rol, sugerido: fijada.txt, confianza: +fijada.conf.toFixed(3), valor,
-    corregido: valor !== fijada.txt, fecha: new Date().toISOString(), modelo: tipoModelo(), ms: Math.round(fijada.ms), exportada: false, img: fijada.blob,
+    corregido: valor !== fijada.txt, fecha: new Date().toISOString(), modelo: tipoModelo(), ms: Math.round(fijada.ms), exportada: false, multi, img: fijada.blob,
     foto: fotoBlob || await fotoChica(),
     caja: [caja.x / foto.width, caja.y / foto.height, caja.w / foto.width, caja.h / foto.height].map(v => +v.toFixed(4)) };
   await tx("lecturas", "readwrite", s => s.put(rec));
@@ -420,8 +441,8 @@ async function contar(pop) {
 async function abrirDatos() {
   const L = await contar();
   const por = {}; L.forEach(l => { const p = por[l.equipo] ||= { n: 0, ok: 0 }; p.n++; if (!l.corregido) p.ok++; });
-  const tot = L.length, bien = L.filter(l => !l.corregido).length, pend = L.filter(l => !l.exportada).length;
-  $("resumen").textContent = tot ? `${tot} lecturas guardadas (${pend} sin exportar). El modelo acertó ${bien} de ${tot} (${Math.round(100 * bien / tot)}%). Meta para los técnicos: 98%.` : "Todavía no guardaste lecturas.";
+  const tot = L.length, bien = L.filter(l => !l.corregido).length, pend = L.filter(l => !l.exportada).length, nm = L.filter(l => l.multi).length;
+  $("resumen").textContent = tot ? `${tot} lecturas guardadas (${pend} sin exportar). El modelo acertó ${bien} de ${tot} (${Math.round(100 * bien / tot)}%). Meta para los técnicos: 98%.${nm ? ` ${nm} con más de un valor en el display.` : ""}` : "Todavía no guardaste lecturas.";
   $("tabla").innerHTML = Object.entries(por).sort((a, b) => b[1].n - a[1].n).map(([k, p]) => {
     const pc = Math.round(100 * p.ok / p.n);
     return `<tr><td>${k}<div class="barra"><i style="transform:scaleX(${p.ok / p.n})"></i></div></td><td>${p.ok}/${p.n}</td><td>${pc}%</td></tr>`;
@@ -454,14 +475,14 @@ const csvCampo = v => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""
 $("exportar").onclick = async () => {
   const L = (await todas()).filter(l => !l.exportada);
   if (!L.length) { toast("No hay lecturas nuevas para exportar"); return; }
-  const filas = [["recorte", "valor", "grupo", "equipo", "foto_original", "sugerido", "confianza", "corregido", "rol", "fecha", "modelo", "ms", "foto", "caja_x", "caja_y", "caja_w", "caja_h"]];
+  const filas = [["recorte", "valor", "grupo", "equipo", "foto_original", "sugerido", "confianza", "corregido", "rol", "fecha", "modelo", "ms", "foto", "caja_x", "caja_y", "caja_w", "caja_h", "multi"]];
   const arch = [];
   for (const l of L) {
     const nom = `c_${l.id}.jpg`;
     arch.push({ nombre: "recortes/" + nom, datos: new Uint8Array(await l.img.arrayBuffer()) });
     let nf = "", cj = ["", "", "", ""];
     if (l.foto) { nf = `f_${l.id}.jpg`; arch.push({ nombre: "fotos/" + nf, datos: new Uint8Array(await l.foto.arrayBuffer()) }); cj = l.caja; }
-    filas.push([nom, l.valor, l.fecha.slice(0, 7), l.equipo, "celular", l.sugerido, l.confianza, l.corregido ? 1 : 0, l.rol, l.fecha, l.modelo, l.ms, nf, ...cj]);
+    filas.push([nom, l.valor, l.fecha.slice(0, 7), l.equipo, "celular", l.sugerido, l.confianza, l.corregido ? 1 : 0, l.rol, l.fecha, l.modelo, l.ms, nf, ...cj, l.multi == null ? "" : (l.multi ? 1 : 0)]);  // vacío = guardada antes de v3.1 (sin dato)
   }
   arch.unshift({ nombre: "etiquetas.csv", datos: new TextEncoder().encode(filas.map(f => f.map(csvCampo).join(",")).join("\n") + "\n") });
   const sello = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
@@ -493,9 +514,12 @@ $("borrar").onclick = async () => {
 };
 
 // ---------- Selector de equipo y rol ----------
-$("equipo").onchange = () => { $("equipoOtro").style.display = $("equipo").value === "__otro" ? "" : "none"; try { localStorage.setItem("lc_equipo", $("equipo").value); } catch (e) {} if (modo === "foto" && caja) leerCaja(); };
+$("equipo").onchange = () => { $("equipoOtro").style.display = $("equipo").value === "__otro" ? "" : "none"; try { localStorage.setItem("lc_equipo", $("equipo").value); } catch (e) {} cargarMulti(); if (modo === "foto" && caja) leerCaja(); };
+$("equipoOtro").onchange = cargarMulti;
+$("multi").onclick = () => ponerMulti(!multi, true);
 document.querySelectorAll("#rol button").forEach(b => b.onclick = () => { rol = b.dataset.r; $("rol").classList.toggle("inst", rol === "instrumento"); });
 try { const e = localStorage.getItem("lc_equipo"); if (e) { $("equipo").value = e; $("equipo").onchange(); } } catch (e) {}
+cargarMulti();
 
 // ---------- Arranque ----------
 (async () => {

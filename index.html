@@ -485,7 +485,8 @@ $("exportar").onclick = async () => {
     filas.push([nom, l.valor, l.fecha.slice(0, 7), l.equipo, "celular", l.sugerido, l.confianza, l.corregido ? 1 : 0, l.rol, l.fecha, l.modelo, l.ms, nf, ...cj, l.multi == null ? "" : (l.multi ? 1 : 0)]);  // vacío = guardada antes de v3.1 (sin dato)
   }
   arch.unshift({ nombre: "etiquetas.csv", datos: new TextEncoder().encode(filas.map(f => f.map(csvCampo).join(",")).join("\n") + "\n") });
-  const sello = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
+  const ah = new Date(), dd = n => String(n).padStart(2, "0");   // hora local del teléfono (no UTC)
+  const sello = `${ah.getFullYear()}${dd(ah.getMonth() + 1)}${dd(ah.getDate())}${dd(ah.getHours())}${dd(ah.getMinutes())}`;
   const blob = zip(arch), nombre = `tanda_${sello}.zip`, file = new File([blob], nombre, { type: "application/zip" });
   let compartido = false;
   if (navigator.canShare && navigator.canShare({ files: [file] })) {

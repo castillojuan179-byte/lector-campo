@@ -51,6 +51,10 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 #foto.si{opacity:1}
 video{transform-origin:50% 50%;transition:transform .15s linear}
 .caja{position:absolute;border:2px solid var(--n2);border-radius:6px;box-shadow:0 0 0 9999px rgba(0,0,0,.32);pointer-events:none}
+/* tiradores de las esquinas: indican que el recuadro se ajusta con el dedo */
+.caja i{position:absolute;width:16px;height:16px;margin:-9px 0 0 -9px;border-radius:50%;background:#fff;border:2.5px solid var(--n2);box-shadow:0 1px 4px rgba(0,0,0,.4);transition:transform .2s var(--res)}
+.caja i:nth-child(1){left:0;top:0}.caja i:nth-child(2){left:100%;top:0}.caja i:nth-child(3){left:0;top:100%}.caja i:nth-child(4){left:100%;top:100%}
+.caja.activa i{transform:scale(1.25)}
 .modoFoto .guia,.modoFoto .zoom,.modoFoto .disparo{opacity:0;pointer-events:none}
 .guia,.zoom,.disparo{transition:opacity .25s,transform .25s var(--res)}
 .guia{box-shadow:none}
@@ -76,18 +80,22 @@ video{transform-origin:50% 50%;transition:transform .15s linear}
 .co.on .cor{transform:none}.co.on .lh{transform:scaleX(1);transition-delay:.18s}.co.on .ld{transform:rotate(-45deg) scaleX(1);transition-delay:.25s}
 .co.on .pt{transform:scale(1);transition-delay:.4s}.co.on .chip{opacity:1;transform:translate(-100%,-50%);transition-delay:.48s}
 /* panel inferior */
-.panel{padding:12px 14px calc(14px + env(safe-area-inset-bottom));background:var(--fondo)}
+.panel{position:relative;padding:12px 14px calc(14px + env(safe-area-inset-bottom));background:var(--fondo)}
 .res{display:flex;align-items:center;gap:12px;margin-bottom:10px}
 .big{flex:1;font-family:ui-monospace,Menlo,monospace;font-size:38px;letter-spacing:.02em;transition:opacity .2s,transform .35s var(--ease)}
 .big.nuevo{animation:sube .4s var(--ease)}
 @keyframes sube{from{transform:translateY(8px);opacity:.2}to{transform:none;opacity:1}}
 .meta{text-align:right;font-size:12px;color:var(--t2);line-height:1.4}
-.aviso{font-size:12.5px;color:#FCD34D;background:rgba(245,158,11,.12);border-radius:12px;padding:8px 11px;margin-bottom:10px;display:none}
-.aviso.si{display:block;animation:sube .3s var(--ease)}
+/* El aviso flota sobre el borde inferior de la foto: no cambia el alto del visor, así la foto y el recuadro no saltan al leer. */
+.aviso{position:absolute;left:14px;right:14px;bottom:calc(100% + 8px);z-index:2;font-size:12.5px;color:#FCD34D;background:rgba(40,30,8,.92);
+  box-shadow:inset 0 0 0 1px rgba(245,158,11,.35);border-radius:12px;padding:8px 11px;opacity:0;transform:translateY(6px);pointer-events:none;
+  transition:opacity .25s,transform .3s var(--ease)}
+.aviso.si{opacity:1;transform:none}
 .btns{display:flex;gap:8px}
 .bt{flex:1;border:none;border-radius:16px;padding:14px 10px;font-weight:700;font-size:14px;color:#e5e5e5;background:var(--p2);transition:transform .3s var(--res),opacity .2s}
 .bt:active{transform:scale(.95)}.bt[disabled]{opacity:.35;pointer-events:none}
 .mant{position:relative;overflow:hidden;flex:1.6;color:#fff;background:#2a2b2f}
+.btns .bt{min-height:62px}   /* alto fijo: que el texto del botón cambie no mueve la foto */
 .mant .fill{position:absolute;inset:0;background:linear-gradient(135deg,#22c55e,#16a34a);transform-origin:0 50%;transform:scaleX(0)}
 .mant.carga .fill{transform:scaleX(1);transition:transform .7s linear}
 .mant span{position:relative}
@@ -128,7 +136,7 @@ video{transform-origin:50% 50%;transition:transform .15s linear}
 <div class="app">
   <div class="cab">
     <span class="ico" id="ico"></span>
-    <div><b>Lector de campo <span style="font-size:11px;color:#FF8D21;font-weight:700">v3.1 · cámara + recuadros</span></b><small id="estModelo">Cargando modelo…</small></div>
+    <div><b>Lector de campo <span style="font-size:11px;color:#FF8D21;font-weight:700">v3.2 · cámara + recuadros</span></b><small id="estModelo">Cargando modelo…</small></div>
     <button class="chipN" id="abrirDatos">Datos <i id="nGuard">0</i></button>
   </div>
   <div class="sel">
@@ -144,7 +152,7 @@ video{transform-origin:50% 50%;transition:transform .15s linear}
     <video id="video" playsinline muted autoplay></video>
     <canvas id="foto" hidden></canvas>
     <div class="guia" id="guia"><i class="a"></i><i class="b"></i><i class="c"></i><i class="d"></i></div>
-    <div class="caja" id="caja" hidden></div>
+    <div class="caja" id="caja" hidden><i></i><i></i><i></i><i></i></div>
     <div class="co" id="co"></div>
     <div class="estado" id="estado"><span class="txt" id="estTxt">Iniciando cámara…</span></div>
     <canvas class="vista" id="vista" width="112" height="64"></canvas>
@@ -317,7 +325,7 @@ async function leerCaja() {
   // vista de lo que entra a la red
   const vc = $("vista").getContext("2d"); vc.drawImage(foto, ...Object.values(regionMargen(caja)), 0, 0, MW, MH); $("vista").classList.add("si");
   fijada = { txt: mejor.txt, conf: mejor.conf, ms, blob: await recorteGuardar() };
-  texto(mejor.txt ? "Si el recuadro no está justo, marcalo con el dedo" : "No leí nada: marcá los números con el dedo");
+  texto(mejor.txt ? "Ajustá las esquinas o arrastrá el recuadro" : "No leí nada: ajustá el recuadro a los números");
   mostrar(mejor.txt, mejor.conf, ms); dibujarCallout(mejor, aPantalla(caja));
 }
 function recorteGuardar() {
@@ -349,25 +357,54 @@ async function disparar() {
   ponerCaja({ x: p0.x, y: p0.y, w: p1.x - p0.x, h: p1.y - p0.y });
   await leerCaja();
 }
-// Marcar los números con el dedo sobre la foto quieta.
+// Ajustar el recuadro con el dedo sobre la foto quieta:
+//  esquinas y bordes → agrandan/achican · adentro → mueve · afuera → dibuja uno nuevo.
+const TOQ = 26, MIN_W = 24, MIN_H = 14;   // tolerancia de toque y tamaño mínimo (px de pantalla)
 let arrastre = null;
+function zonaToque(px, py) {
+  if (!caja) return "nuevo";
+  const p = aPantalla(caja), L = p.x, T = p.y, R = p.x + p.w, B = p.y + p.h;
+  const tv = Math.min(TOQ, p.h / 3), th = Math.min(TOQ, p.w / 3);   // hacia adentro, para que un recuadro chico se pueda mover
+  if (px < L - TOQ || px > R + TOQ || py < T - TOQ || py > B + TOQ) return "nuevo";
+  let z = "";
+  if (py <= T + tv) z += "n"; else if (py >= B - tv) z += "s";
+  if (px <= L + th) z += "o"; else if (px >= R - th) z += "e";
+  if (z) return z;
+  return px > L && px < R && py > T && py < B ? "mover" : "nuevo";
+}
 $("visor").addEventListener("pointerdown", e => {
   if (modo !== "foto" || e.target.closest("button,input")) return;
-  const v = $("visor").getBoundingClientRect(); arrastre = { x0: e.clientX - v.left, y0: e.clientY - v.top };
+  const v = $("visor").getBoundingClientRect(), x0 = e.clientX - v.left, y0 = e.clientY - v.top;
+  arrastre = { x0, y0, zona: zonaToque(x0, y0), p0: caja ? aPantalla(caja) : null };
   $("visor").setPointerCapture(e.pointerId);
 });
 $("visor").addEventListener("pointermove", e => {
   if (!arrastre) return; const v = $("visor").getBoundingClientRect();
-  const x1 = e.clientX - v.left, y1 = e.clientY - v.top;
-  const r = { x: Math.min(arrastre.x0, x1), y: Math.min(arrastre.y0, y1), w: Math.abs(x1 - arrastre.x0), h: Math.abs(y1 - arrastre.y0) };
-  if (r.w > 6 && r.h > 6) {
-    const a = aFoto(r.x, r.y), b = aFoto(r.x + r.w, r.y + r.h);
-    $("co").className = "co"; ponerCaja({ x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y }); arrastre.mov = true;
+  const x1 = e.clientX - v.left, y1 = e.clientY - v.top, dx = x1 - arrastre.x0, dy = y1 - arrastre.y0;
+  if (!arrastre.mov && Math.hypot(dx, dy) < 4) return;   // un toque sin mover no cambia nada
+  const m = mapa(), fx0 = m.ox, fy0 = m.oy, fx1 = m.ox + foto.width * m.s, fy1 = m.oy + foto.height * m.s;   // la foto en pantalla
+  const lim = (a, lo, hi) => Math.min(Math.max(a, lo), hi);
+  let L, T, R, B, z = arrastre.zona, p = arrastre.p0;
+  if (z === "nuevo") {
+    L = Math.min(arrastre.x0, x1); R = Math.max(arrastre.x0, x1); T = Math.min(arrastre.y0, y1); B = Math.max(arrastre.y0, y1);
+    if (R - L < MIN_W || B - T < MIN_H) { if (!arrastre.mov) return; R = Math.max(R, L + MIN_W); B = Math.max(B, T + MIN_H); }
+  } else if (z === "mover") {
+    L = lim(p.x + dx, fx0, fx1 - p.w); T = lim(p.y + dy, fy0, fy1 - p.h); R = L + p.w; B = T + p.h;
+  } else {
+    L = p.x; T = p.y; R = p.x + p.w; B = p.y + p.h;
+    if (z.includes("o")) L = Math.min(p.x + dx, R - MIN_W);
+    if (z.includes("e")) R = Math.max(p.x + p.w + dx, L + MIN_W);
+    if (z.includes("n")) T = Math.min(p.y + dy, B - MIN_H);
+    if (z.includes("s")) B = Math.max(p.y + p.h + dy, T + MIN_H);
   }
+  L = lim(L, fx0, fx1); R = lim(R, fx0, fx1); T = lim(T, fy0, fy1); B = lim(B, fy0, fy1);
+  const a = aFoto(L, T), b = aFoto(R, B);
+  if (!arrastre.mov) { arrastre.mov = true; $("co").className = "co"; $("caja").classList.add("activa"); }
+  ponerCaja({ x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y });
 });
 // Si el visor cambia de tamaño (avisos, teclado), se reacomodan el recuadro y el callout.
 new ResizeObserver(() => { if (modo === "foto" && caja) { ponerCaja(caja); if (fijada) dibujarCallout(fijada, aPantalla(caja)); } }).observe($("visor"));
-const finArrastre = () => { if (arrastre && arrastre.mov && caja) leerCaja(); arrastre = null; };
+const finArrastre = () => { $("caja").classList.remove("activa"); if (arrastre && arrastre.mov && caja) leerCaja(); arrastre = null; };
 $("visor").addEventListener("pointerup", finArrastre); $("visor").addEventListener("pointercancel", finArrastre);
 
 function mostrar(txt, conf, ms) {

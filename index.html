@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#111214">
 <title>Lector de campo · CaliField</title>
 <style>
-:root{--n:#FF7B00;--n2:#FF8D21;--co:#FF5E3A;--dur:#FFE6C4;--ok:#16a34a;--am:#F59E0B;--fondo:#111214;--p:#1d1e21;--p2:#25262a;--t2:#a5a5a5;
+:root{--azul:#38BDF8;--n:#FF7B00;--n2:#FF8D21;--co:#FF5E3A;--dur:#FFE6C4;--ok:#16a34a;--am:#F59E0B;--fondo:#111214;--p:#1d1e21;--p2:#25262a;--t2:#a5a5a5;
   --ease:cubic-bezier(.2,.8,.2,1);--res:cubic-bezier(.34,1.56,.64,1)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:var(--fondo);color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
@@ -23,9 +23,13 @@ button,input,select{font-family:inherit}
 .sel{display:flex;gap:8px;padding:0 14px 10px}
 .sel select,.sel input{flex:1;min-width:0;background:var(--p);border:1.5px solid #2c2d31;color:#fff;border-radius:12px;padding:10px;font-size:14px}
 .rol{display:flex;background:var(--p);border-radius:12px;padding:3px;position:relative;flex-shrink:0}
-.rol button{position:relative;z-index:1;background:none;border:none;color:#ddd;font-weight:700;font-size:13px;padding:8px 10px;width:80px}
-.rol .bola{position:absolute;top:3px;bottom:3px;left:3px;width:80px;border-radius:9px;background:linear-gradient(135deg,var(--n2),var(--co));transition:transform .35s var(--ease)}
-.rol.inst .bola{transform:translateX(80px)}
+.rol button{position:relative;z-index:1;background:none;border:none;color:#ddd;font-weight:700;font-size:13px;padding:8px 4px;width:64px}
+.rol .bola{position:absolute;top:3px;bottom:3px;left:3px;width:64px;border-radius:9px;background:linear-gradient(135deg,var(--n2),var(--co));transition:transform .35s var(--ease)}
+.rol.r1 .bola{transform:translateX(64px)}.rol.r2 .bola{transform:translateX(128px)}
+/* modo Ambos: segundo selector (equipo del UBP) y etiquetas */
+.sel2{display:none}.app.amb .sel2{display:flex}
+.et{flex-shrink:0;align-self:center;font-size:11px;font-weight:800;letter-spacing:.04em;border-radius:8px;padding:4px 7px;color:#111;background:var(--n2);display:none}
+.et.u{background:var(--azul)}.app.amb .et{display:inline-block}
 .visor{position:relative;flex:1;min-height:0;overflow:hidden;background:#000}
 video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .sombra{position:absolute;inset:0;pointer-events:none}
@@ -55,6 +59,20 @@ video{transform-origin:50% 50%;transition:transform .15s linear}
 .caja i{position:absolute;width:16px;height:16px;margin:-9px 0 0 -9px;border-radius:50%;background:#fff;border:2.5px solid var(--n2);box-shadow:0 1px 4px rgba(0,0,0,.4);transition:transform .2s var(--res)}
 .caja i:nth-child(1){left:0;top:0}.caja i:nth-child(2){left:100%;top:0}.caja i:nth-child(3){left:0;top:100%}.caja i:nth-child(4){left:100%;top:100%}
 .caja.activa i{transform:scale(1.25)}
+/* dos recuadros: sin la sombra grande (se taparían entre sí); el activo con halo; el UBP en celeste */
+.visor.doble .caja{box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+.visor.doble .caja.act{box-shadow:0 0 0 1px rgba(0,0,0,.5),0 0 0 4px rgba(255,255,255,.35)}
+.caja.ubp{border-color:var(--azul)}.caja.ubp i{border-color:var(--azul)}
+.co.ubp .pt::after{background:var(--azul)}
+.co.ubp .chip{box-shadow:inset 0 0 0 1.5px var(--azul),0 6px 14px rgba(0,0,0,.35)}
+.chip b{font-family:system-ui;font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;margin-right:6px;color:var(--n2)}
+.co.ubp .chip b{color:var(--azul)}
+.swap{position:absolute;left:10px;top:52px;width:46px;height:46px;border-radius:50%;border:none;background:rgba(17,18,20,.8);color:#fff;font-size:22px;
+  box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.35);opacity:0;transform:scale(.6);pointer-events:none;transition:opacity .25s,transform .35s var(--res)}
+.swap.si{opacity:1;transform:none;pointer-events:auto}.swap:active{transform:scale(.9)}
+.swap.gira span{display:inline-block;animation:gira .45s var(--ease)}
+.swap span{display:inline-block}
+@keyframes gira{from{transform:rotate(0)}to{transform:rotate(180deg)}}
 .modoFoto .guia,.modoFoto .zoom,.modoFoto .disparo{opacity:0;pointer-events:none}
 .guia,.zoom,.disparo{transition:opacity .25s,transform .25s var(--res)}
 .guia{box-shadow:none}
@@ -79,11 +97,17 @@ video{transform-origin:50% 50%;transition:transform .15s linear}
 .chip small{font-family:system-ui;font-size:10px;color:var(--t2);margin-left:6px}
 .co.on .cor{transform:none}.co.on .lh{transform:scaleX(1);transition-delay:.18s}.co.on .ld{transform:rotate(-45deg) scaleX(1);transition-delay:.25s}
 .co.on .pt{transform:scale(1);transition-delay:.4s}.co.on .chip{opacity:1;transform:translate(-100%,-50%);transition-delay:.48s}
+/* si la etiqueta no entra a la izquierda del punto, va a la derecha */
+.chip.der{transform:translate(0,-50%) translateX(10px)}.co.on .chip.der{transform:translate(0,-50%)}
 /* panel inferior */
 .panel{position:relative;padding:12px 14px calc(14px + env(safe-area-inset-bottom));background:var(--fondo)}
-.res{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.res{display:flex;align-items:center;gap:12px;margin-bottom:10px;min-height:58px}   /* alto fijo: 1 o 2 valores no mueven la foto */
 .big{flex:1;font-family:ui-monospace,Menlo,monospace;font-size:38px;letter-spacing:.02em;transition:opacity .2s,transform .35s var(--ease)}
 .big.nuevo{animation:sube .4s var(--ease)}
+.big.doble{font-size:24px;display:flex;flex-direction:column;gap:3px;line-height:1.15}
+.big .lin{opacity:.55;transition:opacity .2s}.big .lin.act{opacity:1}
+.big .lin i{font-style:normal;font-family:system-ui;font-size:11px;font-weight:800;border-radius:6px;padding:2px 6px;margin-right:8px;vertical-align:4px;background:var(--n2);color:#111}
+.big .lin i.u{background:var(--azul)}.big .lin small{font-size:12px;margin-left:6px;color:var(--t2)}
 @keyframes sube{from{transform:translateY(8px);opacity:.2}to{transform:none;opacity:1}}
 .meta{text-align:right;font-size:12px;color:var(--t2);line-height:1.4}
 /* El aviso flota sobre el borde inferior de la foto: no cambia el alto del visor, así la foto y el recuadro no saltan al leer. */
@@ -136,24 +160,33 @@ video{transform-origin:50% 50%;transition:transform .15s linear}
 <div class="app">
   <div class="cab">
     <span class="ico" id="ico"></span>
-    <div><b>Lector de campo <span style="font-size:11px;color:#FF8D21;font-weight:700">v3.3 · recuadro automático</span></b><small id="estModelo">Cargando modelo…</small></div>
+    <div><b>Lector de campo <span style="font-size:11px;color:#FF8D21;font-weight:700">v3.4 · patrón y UBP juntos</span></b><small id="estModelo">Cargando modelo…</small></div>
     <button class="chipN" id="abrirDatos">Datos <i id="nGuard">0</i></button>
   </div>
   <div class="sel">
+    <span class="et">Patrón</span>
     <select id="equipo">
       <option>SPMK700</option><option>KIMO MP 210</option><option>Vaisala HM70</option><option>Vaisala HMT330</option>
       <option>Isotech</option><option>Mettler Toledo M200</option><option>Mettler Toledo M800</option><option>Veris</option>
       <option>Presys</option><option>Balanza</option><option value="__otro">Otro…</option>
     </select>
     <input id="equipoOtro" placeholder="Equipo" style="display:none">
-    <div class="rol" id="rol"><span class="bola"></span><button data-r="patron">Patrón</button><button data-r="instrumento">UBP</button></div>
+    <div class="rol" id="rol"><span class="bola"></span><button data-r="patron">Patrón</button><button data-r="instrumento">UBP</button><button data-r="ambos">Ambos</button></div>
+  </div>
+  <div class="sel sel2" id="sel2">
+    <span class="et u">UBP</span>
+    <select id="equipo2"></select>
+    <input id="equipo2Otro" placeholder="Equipo del UBP" style="display:none">
   </div>
   <div class="visor" id="visor">
     <video id="video" playsinline muted autoplay></video>
     <canvas id="foto" hidden></canvas>
     <div class="guia" id="guia"><i class="a"></i><i class="b"></i><i class="c"></i><i class="d"></i></div>
     <div class="caja" id="caja" hidden><i></i><i></i><i></i><i></i></div>
+    <div class="caja ubp" id="caja2" hidden><i></i><i></i><i></i><i></i></div>
     <div class="co" id="co"></div>
+    <div class="co ubp" id="co2"></div>
+    <button class="swap" id="swap" aria-label="Intercambiar patrón y UBP"><span>⇄</span></button>
     <div class="estado" id="estado"><span class="txt" id="estTxt">Iniciando cámara…</span></div>
     <canvas class="vista" id="vista" width="112" height="64"></canvas>
     <div class="zoom" id="zoomBox"><span>−</span><input type="range" id="zoom" min="1" max="4" step="0.1" value="1"><span id="zoomTxt">1×</span></div>
@@ -225,8 +258,12 @@ async function sesion(tipo) {
   $(tipo === "general" ? "infoG" : "infoS").textContent = `${origen}, ${(buf.byteLength / 1048576).toFixed(1)} MB, cargó en ${Math.round(performance.now() - t0)} ms`;
   return sesiones[tipo];
 }
-const equipo = () => $("equipo").value === "__otro" ? ($("equipoOtro").value.trim() || "Otro") : $("equipo").value;
-const tipoModelo = () => /SPMK/i.test(equipo()) ? "spmk" : "general";
+const leerEq = (sel, otro) => $(sel).value === "__otro" ? ($(otro).value.trim() || "Otro") : $(sel).value;
+const equipo = () => leerEq("equipo", "equipoOtro");                 // el patrón (o el único equipo)
+const equipo2 = () => leerEq("equipo2", "equipo2Otro");             // el UBP, en modo Ambos
+const equipoDe = r => ambos() && r === "instrumento" ? equipo2() : equipo();
+const tipoDe = eq => /SPMK/i.test(eq) ? "spmk" : "general";
+const tipoModelo = () => tipoDe(equipo());
 
 // ---------- Detector: encuentra dónde está el número en la foto ----------
 // Misma cuenta que entrenar_detector.py: foto en un cuadrado de 320 con gris, normalización ImageNet,
@@ -260,9 +297,9 @@ async function detectar() {
   const t0 = performance.now(), o = (await s.run({ imagen: new ort.Tensor("float32", a, [1, 3, L, L]) })).salida;
   const G = o.dims[2], GG = G * G, z = o.data, ms = performance.now() - t0;
   let conf = 0; for (let i = 0; i < GG; i++) if (z[i] > conf) conf = z[i];
-  if (conf < DET.umbral) return { caja: null, conf, ms };
-  // celdas con puntaje alto, agrupadas por vecindad: se queda con el grupo más fuerte
-  const visto = new Uint8Array(GG); let mejor = null;
+  if (conf < DET.umbral) return { cajas: [], conf, ms };
+  // celdas con puntaje alto, agrupadas por vecindad: cada grupo es un número; se ordenan del más fuerte al más débil
+  const visto = new Uint8Array(GG), grupos = [];
   for (let i0 = 0; i0 < GG; i0++) {
     if (z[i0] < DET.umbral || visto[i0]) continue;
     const pila = [i0], celdas = []; visto[i0] = 1;
@@ -273,19 +310,22 @@ async function detectar() {
         const j = rr * G + qq; if (!visto[j] && z[j] >= DET.umbral) { visto[j] = 1; pila.push(j); }
       }
     }
-    const peso = celdas.reduce((t, i) => t + z[i], 0);
-    if (!mejor || peso > mejor.peso) mejor = { peso, celdas };
+    grupos.push({ peso: celdas.reduce((t, i) => t + z[i], 0), celdas });
   }
-  let x0 = 0, y0 = 0, x1 = 0, y1 = 0, tot = 0, cmax = 0; const f = L / DET.esc;
-  for (const i of mejor.celdas) {
-    const w = z[i], cx = (i % G + 0.5) * DET.paso, cy = (((i / G) | 0) + 0.5) * DET.paso;
-    x0 += w * (cx - z[GG + i] * f); y0 += w * (cy - z[2 * GG + i] * f); x1 += w * (cx + z[3 * GG + i] * f); y1 += w * (cy + z[4 * GG + i] * f);
-    tot += w; if (w > cmax) cmax = w;
+  grupos.sort((a, b) => b.peso - a.peso);
+  const f = L / DET.esc, cajas = [];
+  for (const g of grupos) {
+    let x0 = 0, y0 = 0, x1 = 0, y1 = 0, tot = 0, cmax = 0;
+    for (const i of g.celdas) {
+      const w = z[i], cx = (i % G + 0.5) * DET.paso, cy = (((i / G) | 0) + 0.5) * DET.paso;
+      x0 += w * (cx - z[GG + i] * f); y0 += w * (cy - z[2 * GG + i] * f); x1 += w * (cx + z[3 * GG + i] * f); y1 += w * (cy + z[4 * GG + i] * f);
+      tot += w; if (w > cmax) cmax = w;
+    }
+    x0 = Math.max(0, (x0 / tot - ox) / k); y0 = Math.max(0, (y0 / tot - oy) / k);
+    x1 = Math.min(foto.width, (x1 / tot - ox) / k); y1 = Math.min(foto.height, (y1 / tot - oy) / k);
+    if (x1 - x0 >= 4 && y1 - y0 >= 4) cajas.push({ caja: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, conf: cmax });
   }
-  x0 = Math.max(0, (x0 / tot - ox) / k); y0 = Math.max(0, (y0 / tot - oy) / k);
-  x1 = Math.min(foto.width, (x1 / tot - ox) / k); y1 = Math.min(foto.height, (y1 / tot - oy) / k);
-  if (x1 - x0 < 4 || y1 - y0 < 4) return { caja: null, conf: cmax, ms };
-  return { caja: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, conf: cmax, ms };
+  return { cajas, conf: cajas.length ? cajas[0].conf : conf, ms };
 }
 
 // ---------- Marca "más de un valor" ----------
@@ -299,11 +339,16 @@ function ponerMulti(v, recordar) {
 function cargarMulti() { let v = false; try { v = localStorage.getItem(claveMulti()) === "1"; } catch (e) {} ponerMulti(v, false); }
 
 // ---------- Cámara (modo foto) ----------
+// Cada foto tiene 1 lugar (Patrón o UBP) o 2 (Ambos: patrón y UBP en la misma foto).
+// Cada lugar tiene su recuadro, su lectura, su equipo y su modelo.
 const valido = t => /^-?\d+(\.\d+)?$/.test(t);
 const vid = $("video"), foto = $("foto");
 const MARG = { i: .42, d: .32, a: .49, b: .47 };   // márgenes alrededor de los números: los mismos de todos los recortes de entrenamiento
 const ASPECTO_NUM = 1.83;                            // proporción típica de un renglón de números
-let fotoBlob = null, rol = "patron", modo = "vivo", zoomHW = false, zoomDig = 1, caja = null, fijada = null, leyendo = 0, cajaAuto = null, detConf = null, origenCaja = "marco";
+const NOMBRE_ROL = { patron: "Patrón", instrumento: "UBP" };
+let fotoBlob = null, rol = "patron", modo = "vivo", zoomHW = false, zoomDig = 1, slots = [], activo = 0, leyendo = 0;
+const ambos = () => rol === "ambos";
+const slotAct = () => slots[activo];
 function ponerGuia() {
   const v = $("visor").getBoundingClientRect(), w = Math.min(v.width * 0.5, v.height * 0.45 * ASPECTO_NUM), h = w / ASPECTO_NUM;
   Object.assign($("guia").style, { width: w + "px", height: h + "px", left: (v.width - w) / 2 + "px", top: (v.height - h) / 2 - 30 + "px" });
@@ -332,7 +377,7 @@ function sacarFoto() {
   foto.getContext("2d").drawImage(vid, sx, sy, sw, sh, 0, 0, foto.width, foto.height);
   return true;
 }
-// Foto mostrada con object-fit: contain. Se recalcula siempre, porque el visor cambia de alto cuando aparecen avisos.
+// Foto mostrada con object-fit: contain. Se recalcula siempre, porque el visor puede cambiar de alto (teclado).
 function mapa() {
   const v = $("visor").getBoundingClientRect(), s = Math.min(v.width / foto.width, v.height / foto.height);
   return { s, ox: (v.width - foto.width * s) / 2, oy: (v.height - foto.height * s) / 2, v };
@@ -354,8 +399,8 @@ function tensorDe(r) {
   const sd = Math.sqrt(s2 / a.length) + 1e-5; for (let i = 0; i < a.length; i++) a[i] = (a[i] - m) / sd;
   return a;
 }
-async function inferir(a) {
-  const s = await sesion(tipoModelo());
+async function inferir(a, tipo) {
+  const s = await sesion(tipo);
   const out = await s.run({ imagen: new ort.Tensor("float32", a, [1, 1, MH, MW]) });
   const L = out.logits, T = L.dims[1], K = L.dims[2], z = L.data; let txt = "", prev = 0, conf = 1;
   for (let t = 0; t < T; t++) {
@@ -367,72 +412,121 @@ async function inferir(a) {
   }
   return { txt, conf: txt ? conf : 0 };
 }
+
+// --- lugares (recuadro + lectura) ---
+function nuevoSlot(i, rolSlot) {
+  const el = $(i ? "caja2" : "caja"), co = $(i ? "co2" : "co");
+  el.classList.toggle("ubp", ambos() && rolSlot === "instrumento"); co.classList.toggle("ubp", ambos() && rolSlot === "instrumento");
+  return { rol: rolSlot, eq: equipoDe(rolSlot), caja: null, auto: null, conf: null, origen: "marco", fijada: null, valor: null, tok: 0, el, co };
+}
+function ponerCaja(s, c) {
+  s.caja = c; const p = aPantalla(c);
+  Object.assign(s.el.style, { left: p.x + "px", top: p.y + "px", width: p.w + "px", height: p.h + "px" }); s.el.hidden = false;
+}
+function marcarActivo(i) {
+  activo = i; slots.forEach((s, j) => s.el.classList.toggle("act", ambos() && j === i));
+  if (ambos()) $("corrIn").placeholder = `Valor del ${NOMBRE_ROL[slotAct().rol]}`;
+}
 // Lee el recuadro 3 veces con márgenes un poco distintos y se queda con lo que más se repite:
 // si el recuadro no quedó perfecto, la lectura no depende de unos píxeles.
-async function leerCaja() {
-  if (!caja) return; const yo = ++leyendo, t0 = performance.now();
+async function leerSlot(s) {
+  if (!s || !s.caja) return; const yo = ++s.tok, t0 = performance.now(), tipo = tipoDe(s.eq);
   texto("Leyendo…");
   const res = [];
-  for (const f of [1, 0.8, 1.2]) res.push(await inferir(tensorDe(regionMargen(caja, f))));
-  if (yo !== leyendo) return;
+  for (const f of [1, 0.8, 1.2]) res.push(await inferir(tensorDe(regionMargen(s.caja, f)), tipo));
+  if (yo !== s.tok || !slots.includes(s)) return;
   const votos = {}; res.forEach(r => { if (!r.txt) return; (votos[r.txt] ||= []).push(r.conf); });
   let mejor = { txt: "", conf: 0 };
   for (const [t, cs] of Object.entries(votos)) {
     const sc = cs.length + Math.max(...cs) / 10;
     if (!mejor.sc || sc > mejor.sc) mejor = { txt: t, conf: cs.reduce((a, b) => a + b, 0) / cs.length * (cs.length / res.length), sc };
   }
-  const ms = performance.now() - t0;
-  // vista de lo que entra a la red
-  const vc = $("vista").getContext("2d"); vc.drawImage(foto, ...Object.values(regionMargen(caja)), 0, 0, MW, MH); $("vista").classList.add("si");
-  fijada = { txt: mejor.txt, conf: mejor.conf, ms, blob: await recorteGuardar() };
-  texto(!mejor.txt ? "No leí nada: ajustá el recuadro a los números"
-    : origenCaja === "auto" ? `Recuadro automático (${Math.round(detConf * 100)}%) · ajustalo si no está justo` : "Ajustá las esquinas o arrastrá el recuadro");
-  mostrar(mejor.txt, mejor.conf, ms); dibujarCallout(mejor, aPantalla(caja));
+  s.fijada = { txt: mejor.txt, conf: mejor.conf, ms: performance.now() - t0, modelo: tipo, blob: await recorteGuardar(s.caja) };
+  s.valor = null;   // una lectura nueva reemplaza la corrección anterior de ese recuadro
+  if (s === slotAct()) { const vc = $("vista").getContext("2d"); vc.drawImage(foto, ...Object.values(regionMargen(s.caja)), 0, 0, MW, MH); $("vista").classList.add("si"); }
+  dibujarCallout(s); actualizarPanel();
 }
-function recorteGuardar() {
-  const r = regionMargen(caja), k = Math.min(1, 480 / r.sw), c = document.createElement("canvas");
-  c.width = Math.round(r.sw * k); c.height = Math.round(r.sh * k);
-  const x = c.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(foto, r.sx, r.sy, r.sw, r.sh, 0, 0, c.width, c.height);
-  return new Promise(ok => c.toBlob(ok, "image/jpeg", 0.9));
+const leerTodos = () => Promise.all(slots.map(leerSlot));
+function recorteGuardar(c) {
+  const r = regionMargen(c), k = Math.min(1, 480 / r.sw), cv = document.createElement("canvas");
+  cv.width = Math.round(r.sw * k); cv.height = Math.round(r.sh * k);
+  const x = cv.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(foto, r.sx, r.sy, r.sw, r.sh, 0, 0, cv.width, cv.height);
+  return new Promise(ok => cv.toBlob(ok, "image/jpeg", 0.9));
 }
-// Foto completa achicada (lado mayor 1280 px): junto con el recuadro, es el dato para entrenar el detector.
+// Foto completa achicada (lado mayor 1280 px): junto con los recuadros, es el dato para entrenar el detector.
 function fotoChica() {
   const k = Math.min(1, 1280 / Math.max(foto.width, foto.height)), c = document.createElement("canvas");
   c.width = Math.round(foto.width * k); c.height = Math.round(foto.height * k);
   const x = c.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(foto, 0, 0, c.width, c.height);
   return new Promise(ok => c.toBlob(ok, "image/jpeg", 0.85));
 }
-function ponerCaja(c) {
-  caja = c; const p = aPantalla(c);
-  Object.assign($("caja").style, { left: p.x + "px", top: p.y + "px", width: p.w + "px", height: p.h + "px" }); $("caja").hidden = false;
+function cajaGuia() {
+  const v = $("visor").getBoundingClientRect(), g = $("guia").getBoundingClientRect();
+  const p0 = aFoto(g.left - v.left, g.top - v.top), p1 = aFoto(g.right - v.left, g.bottom - v.top);
+  return { x: p0.x, y: p0.y, w: p1.x - p0.x, h: p1.y - p0.y };
+}
+// Patrón y UBP: cuál de los dos recuadros es cada uno. Se ordenan por el eje en que están separados
+// (izquierda→derecha o arriba→abajo) y se recuerda, por par de equipos, si el patrón es el primero o el segundo.
+const claveLado = () => `lc_lado_${equipoDe("patron")}|${equipoDe("instrumento")}`;
+function patronPrimero() { try { return localStorage.getItem(claveLado()) !== "2"; } catch (e) { return true; } }
+function ordenar(a, b) {
+  const ca = { x: a.x + a.w / 2, y: a.y + a.h / 2 }, cb = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+  const ejeX = Math.abs(ca.x - cb.x) >= Math.abs(ca.y - cb.y);
+  return (ejeX ? ca.x <= cb.x : ca.y <= cb.y) ? [a, b] : [b, a];
 }
 async function disparar() {
   if (modo !== "vivo" || !sacarFoto()) return;
   modo = "foto"; vid.pause(); fotoBlob = null; fotoChica().then(b => fotoBlob = b);
   $("disparo").classList.add("pulsa"); setTimeout(() => $("disparo").classList.remove("pulsa"), 250);
   foto.hidden = false; requestAnimationFrame(() => foto.classList.add("si"));
-  $("visor").classList.add("modoFoto"); $("panel").classList.add("foto");
+  $("visor").classList.add("modoFoto"); $("visor").classList.toggle("doble", ambos()); $("panel").classList.add("foto");
+  slots = ambos() ? [nuevoSlot(0, "patron"), nuevoSlot(1, "instrumento")] : [nuevoSlot(0, rol)];
+  marcarActivo(0);
   // Propuesta inicial: la del detector si hay y está seguro; si no, el marco guía (en píxeles de la foto).
-  const yo = ++leyendo; texto("Buscando el número…");
+  const yo = ++leyendo; texto(ambos() ? "Buscando los dos números…" : "Buscando el número…");
   let det = null; try { det = await detectar(); } catch (e) { det = null; }
   if (yo !== leyendo || modo !== "foto" || (arrastre && arrastre.mov)) return;   // si ya lo estás marcando vos, manda lo tuyo
-  detConf = det ? +det.conf.toFixed(3) : null;
-  cajaAuto = det && det.caja ? { ...det.caja } : null; origenCaja = cajaAuto ? "auto" : "marco";
-  if (cajaAuto) ponerCaja(cajaAuto);
-  else {
-    const v = $("visor").getBoundingClientRect(), g = $("guia").getBoundingClientRect();
-    const p0 = aFoto(g.left - v.left, g.top - v.top), p1 = aFoto(g.right - v.left, g.bottom - v.top);
-    ponerCaja({ x: p0.x, y: p0.y, w: p1.x - p0.x, h: p1.y - p0.y });
+  const props = det ? det.cajas : [];
+  if (!ambos()) {
+    const s = slots[0]; s.conf = det ? +det.conf.toFixed(3) : null;
+    if (props[0]) { s.auto = { ...props[0].caja }; s.origen = "auto"; s.conf = +props[0].conf.toFixed(3); ponerCaja(s, s.auto); }
+    else ponerCaja(s, cajaGuia());
+  } else {
+    let cajas = props.slice(0, 2).map(p => ({ ...p.caja, conf: p.conf }));
+    if (cajas.length === 1) {   // encontró uno solo: el otro va espejado del otro lado de la foto
+      const c = cajas[0], mx = foto.width - c.x - c.w, my = foto.height - c.y - c.h;
+      cajas.push(Math.abs(mx - c.x) >= Math.abs(my - c.y) ? { ...c, x: mx, conf: 0, marco: 1 } : { ...c, y: my, conf: 0, marco: 1 });
+    }
+    if (!cajas.length) {        // ninguno: el marco guía partido en dos
+      const g = cajaGuia(); cajas = [{ ...g, w: g.w / 2 - 4, conf: 0, marco: 1 }, { ...g, x: g.x + g.w / 2 + 4, w: g.w / 2 - 4, conf: 0, marco: 1 }];
+    }
+    let [a, b] = ordenar(cajas[0], cajas[1]); if (!patronPrimero()) [a, b] = [b, a];
+    [a, b].forEach((c, i) => {
+      const s = slots[i], limpia = { x: c.x, y: c.y, w: c.w, h: c.h };
+      if (!c.marco) { s.auto = { ...limpia }; s.origen = "auto"; s.conf = +c.conf.toFixed(3); }
+      ponerCaja(s, limpia);
+    });
   }
-  await leerCaja();
+  $("swap").classList.toggle("si", ambos());
+  await leerTodos();
 }
-// Ajustar el recuadro con el dedo sobre la foto quieta:
-//  esquinas y bordes → agrandan/achican · adentro → mueve · afuera → dibuja uno nuevo.
+// ⇄ Patrón ↔ UBP: intercambia los recuadros (cada uno se vuelve a leer con el modelo de su equipo) y lo recuerda para este par de equipos.
+async function intercambiar() {
+  if (!ambos() || slots.length < 2) return;
+  const [p, u] = slots, campos = ["caja", "auto", "conf", "origen"];
+  campos.forEach(k => { const t = p[k]; p[k] = u[k]; u[k] = t; });
+  ponerCaja(p, p.caja); ponerCaja(u, u.caja);
+  try { localStorage.setItem(claveLado(), patronPrimero() ? "2" : "1"); } catch (e) {}
+  $("swap").classList.remove("gira"); void $("swap").offsetWidth; $("swap").classList.add("gira");
+  toast("Patrón ⇄ UBP intercambiados"); await leerTodos();
+}
+// Ajustar los recuadros con el dedo sobre la foto quieta:
+//  esquinas y bordes → agrandan/achican · adentro → mueve · afuera → dibuja uno nuevo (del recuadro activo).
 const TOQ = 26, MIN_W = 24, MIN_H = 14;   // tolerancia de toque y tamaño mínimo (px de pantalla)
 let arrastre = null;
-function zonaToque(px, py) {
-  if (!caja) return "nuevo";
-  const p = aPantalla(caja), L = p.x, T = p.y, R = p.x + p.w, B = p.y + p.h;
+function zonaToque(s, px, py) {
+  if (!s || !s.caja) return "nuevo";
+  const p = aPantalla(s.caja), L = p.x, T = p.y, R = p.x + p.w, B = p.y + p.h;
   const tv = Math.min(TOQ, p.h / 3), th = Math.min(TOQ, p.w / 3);   // hacia adentro, para que un recuadro chico se pueda mover
   if (px < L - TOQ || px > R + TOQ || py < T - TOQ || py > B + TOQ) return "nuevo";
   let z = "";
@@ -442,9 +536,15 @@ function zonaToque(px, py) {
   return px > L && px < R && py > T && py < B ? "mover" : "nuevo";
 }
 $("visor").addEventListener("pointerdown", e => {
-  if (modo !== "foto" || e.target.closest("button,input")) return;
+  if (modo !== "foto" || !slots.length || e.target.closest("button,input")) return;
   const v = $("visor").getBoundingClientRect(), x0 = e.clientX - v.left, y0 = e.clientY - v.top;
-  arrastre = { x0, y0, zona: zonaToque(x0, y0), p0: caja ? aPantalla(caja) : null };
+  // primero el recuadro activo; si el dedo cae en el otro, pasa a ser el activo
+  const orden = [activo, ...slots.map((_, i) => i).filter(i => i !== activo)];
+  let idx = activo, zona = "nuevo";
+  for (const i of orden) { const z = zonaToque(slots[i], x0, y0); if (z !== "nuevo") { idx = i; zona = z; break; } }
+  if (idx !== activo) { marcarActivo(idx); actualizarPanel(); }
+  const s = slots[idx];
+  arrastre = { x0, y0, zona, s, p0: s.caja ? aPantalla(s.caja) : null };
   $("visor").setPointerCapture(e.pointerId);
 });
 $("visor").addEventListener("pointermove", e => {
@@ -467,57 +567,84 @@ $("visor").addEventListener("pointermove", e => {
     if (z.includes("s")) B = Math.max(p.y + p.h + dy, T + MIN_H);
   }
   L = lim(L, fx0, fx1); R = lim(R, fx0, fx1); T = lim(T, fy0, fy1); B = lim(B, fy0, fy1);
-  const a = aFoto(L, T), b = aFoto(R, B);
-  if (!arrastre.mov) { arrastre.mov = true; origenCaja = "mano"; $("co").className = "co"; $("caja").classList.add("activa"); }
-  ponerCaja({ x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y });
+  const a = aFoto(L, T), b = aFoto(R, B), s = arrastre.s;
+  if (!arrastre.mov) { arrastre.mov = true; s.origen = "mano"; s.co.classList.remove("on"); s.el.classList.add("activa"); }
+  ponerCaja(s, { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y });
 });
-// Si el visor cambia de tamaño (avisos, teclado), se reacomodan el recuadro y el callout.
-new ResizeObserver(() => { if (modo === "foto" && caja) { ponerCaja(caja); if (fijada) dibujarCallout(fijada, aPantalla(caja)); } }).observe($("visor"));
-const finArrastre = () => { $("caja").classList.remove("activa"); if (arrastre && arrastre.mov && caja) leerCaja(); arrastre = null; };
+// Si el visor cambia de tamaño (teclado), se reacomodan los recuadros y los callouts.
+new ResizeObserver(() => { if (modo === "foto") slots.forEach(s => { if (s.caja) { ponerCaja(s, s.caja); if (s.fijada) dibujarCallout(s); } }); }).observe($("visor"));
+const finArrastre = () => {
+  const a = arrastre; arrastre = null; if (!a) return;
+  a.s.el.classList.remove("activa"); if (a.mov && a.s.caja) leerSlot(a.s);
+};
 $("visor").addEventListener("pointerup", finArrastre); $("visor").addEventListener("pointercancel", finArrastre);
 
-function mostrar(txt, conf, ms) {
-  const b = $("big"); b.textContent = txt || "—"; b.classList.remove("nuevo"); void b.offsetWidth; b.classList.add("nuevo");
-  $("meta").innerHTML = `confianza ${Math.round(conf * 100)}%<br>${tipoModelo() === "spmk" ? "especialista SPMK" : "modelo general"} · ${Math.round(ms)} ms`;
-  const dec = FORMATOS[equipo()], dd = (txt.split(".")[1] || "").length, av = [];
-  if (txt && dec != null && dd !== dec) av.push(`El ${equipo()} muestra ${dec} decimales y se leyeron ${dd}. Revisalo antes de guardar.`);
-  if (txt && conf < .95) av.push(`Confianza ${Math.round(conf * 100)}%: mirá bien el display.`);
+const valorDe = s => s.valor ?? (s.fijada ? s.fijada.txt : "");
+function actualizarPanel() {
+  const s = slotAct(); if (!s) return;
+  const b = $("big"), av = [];
+  if (ambos()) {
+    b.classList.add("doble");
+    b.innerHTML = slots.map(x => `<span class="lin${x === s ? " act" : ""}"><i class="${x.rol === "instrumento" ? "u" : "p"}">${x.rol === "instrumento" ? "U" : "P"}</i>${valorDe(x) || "—"}${x.valor != null ? "<small>✎</small>" : ""}</span>`).join("");
+  } else { b.classList.remove("doble"); b.textContent = valorDe(s) || "—"; }
+  b.classList.remove("nuevo"); void b.offsetWidth; b.classList.add("nuevo");
+  const f = s.fijada;
+  $("meta").innerHTML = f ? `${ambos() ? NOMBRE_ROL[s.rol] + " · " : ""}confianza ${Math.round(f.conf * 100)}%<br>${f.modelo === "spmk" ? "especialista SPMK" : "modelo general"} · ${Math.round(f.ms)} ms` : "Leyendo…";
+  for (const x of slots) {
+    const t = valorDe(x), dec = FORMATOS[x.eq], dd = (t.split(".")[1] || "").length, quien = ambos() ? `${NOMBRE_ROL[x.rol]}: ` : "";
+    if (t && dec != null && dd !== dec && x.valor == null) av.push(`${quien}el ${x.eq} muestra ${dec} decimales y se leyeron ${dd}. Revisalo antes de guardar.`);
+    if (x.fijada && x.fijada.txt && x.valor == null && x.fijada.conf < .95) av.push(`${quien}confianza ${Math.round(x.fijada.conf * 100)}%: mirá bien el display.`);
+  }
   $("aviso").innerHTML = av.join("<br>"); $("aviso").classList.toggle("si", av.length > 0);
-  $("ok").disabled = !valido(txt); $("okTxt").textContent = valido(txt) ? "Mantené para guardar" : "Usá Corregir";
+  const listos = slots.length && slots.every(x => valido(valorDe(x)));
+  $("ok").disabled = !listos; $("okTxt").textContent = listos ? (ambos() ? "Mantené para guardar los 2" : "Mantené para guardar") : "Usá Corregir";
+  const sa = slots.find(x => x.fijada && !x.fijada.txt);
+  texto(sa ? (ambos() ? `No leí el ${NOMBRE_ROL[sa.rol]}: ajustá su recuadro` : "No leí nada: ajustá el recuadro a los números")
+    : s.origen === "auto" ? `Recuadro automático (${Math.round(s.conf * 100)}%) · ajustalo si no está justo`
+    : ambos() ? "Tocá un recuadro para ajustarlo · ⇄ si están al revés" : "Ajustá las esquinas o arrastrá el recuadro");
 }
-function dibujarCallout(r, p) {
+function dibujarCallout(s) {
   // Corchete debajo del recuadro, diagonal a 45° y punto con el chip del valor.
+  const co = s.co, r = { txt: valorDe(s), conf: s.valor != null ? 1 : (s.fijada ? s.fijada.conf : 0) }, p = aPantalla(s.caja);
   const v = $("visor").getBoundingClientRect(), yU = Math.min(p.y + p.h + 10, v.height - 70);
   const fin = p.x + p.w / 2 + 6, d = 28, cx = fin - d, cy = yU + d;
-  $("co").className = "co";
-  if (!r.txt) { $("co").innerHTML = ""; return; }
-  $("co").innerHTML = `<div class="cor" style="left:${p.x + 4}px;top:${yU - 8}px;width:${Math.max(10, p.w - 8)}px"></div>
+  co.classList.remove("on");
+  if (!r.txt) { co.innerHTML = ""; return; }
+  const tag = ambos() ? `<b>${NOMBRE_ROL[s.rol]}</b>` : "";
+  co.innerHTML = `<div class="cor" style="left:${p.x + 4}px;top:${yU - 8}px;width:${Math.max(10, p.w - 8)}px"></div>
     <div class="ld" style="left:${cx}px;top:${cy - 1}px;width:${d * Math.SQRT2}px"></div>
     <div class="pt" style="left:${cx}px;top:${cy}px"></div>
-    <div class="chip" style="left:${cx - 16}px;top:${cy}px">${r.txt}<small>${Math.round(r.conf * 100)}%</small></div>`;
-  requestAnimationFrame(() => requestAnimationFrame(() => $("co").classList.add("on")));
+    <div class="chip" style="left:${cx - 16}px;top:${cy}px">${tag}${r.txt}<small>${s.valor != null ? "✎" : Math.round(r.conf * 100) + "%"}</small></div>`;
+  const ch = co.querySelector(".chip");
+  if (cx - 16 - ch.offsetWidth < 6) { ch.classList.add("der"); ch.style.left = cx + 16 + "px"; }
+  requestAnimationFrame(() => requestAnimationFrame(() => co.classList.add("on")));
 }
 function reiniciar() {
-  leyendo++; modo = "vivo"; caja = null; fijada = null; cajaAuto = null; detConf = null; origenCaja = "marco";
-  $("co").className = "co"; $("caja").hidden = true; $("vista").classList.remove("si");
+  leyendo++; modo = "vivo"; slots.forEach(s => s.tok++); slots = []; activo = 0;
+  for (const id of ["co", "co2"]) $(id).className = "co" + (id === "co2" ? " ubp" : "");
+  for (const id of ["caja", "caja2"]) { $(id).hidden = true; $(id).classList.remove("act", "activa"); }
+  $("vista").classList.remove("si"); $("swap").classList.remove("si");
   foto.classList.remove("si"); setTimeout(() => { if (modo === "vivo") foto.hidden = true; }, 300);
-  $("visor").classList.remove("modoFoto"); $("panel").classList.remove("foto");
-  $("big").textContent = "—"; $("meta").innerHTML = "Encuadrá los números en el marco<br>y sacá la foto";
-  $("aviso").classList.remove("si"); $("corr").classList.remove("si"); $("ok").disabled = true;
-  texto("Apuntá y sacá la foto"); vid.play().catch(() => {});
+  $("visor").classList.remove("modoFoto", "doble"); $("panel").classList.remove("foto");
+  $("big").classList.remove("doble"); $("big").textContent = "—";
+  $("meta").innerHTML = ambos() ? "Encuadrá los dos displays<br>y sacá la foto" : "Encuadrá los números en el marco<br>y sacá la foto";
+  $("aviso").classList.remove("si"); $("corr").classList.remove("si"); $("ok").disabled = true; $("corrIn").placeholder = "Valor correcto";
+  texto(ambos() ? "Apuntá a los dos displays y sacá la foto" : "Apuntá y sacá la foto"); vid.play().catch(() => {});
 }
 
 // ---------- Guardar ----------
 function toast(t) { const e = $("toast"); e.textContent = t; e.classList.add("si"); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove("si"), 1800); }
-async function guardar(valor) {
-  if (!fijada || !caja) return;
-  const rec = { id: Date.now(), equipo: equipo(), rol, sugerido: fijada.txt, confianza: +fijada.conf.toFixed(3), valor,
-    corregido: valor !== fijada.txt, fecha: new Date().toISOString(), modelo: tipoModelo(), ms: Math.round(fijada.ms), exportada: false, multi, img: fijada.blob,
-    foto: fotoBlob || await fotoChica(),
-    caja: [caja.x / foto.width, caja.y / foto.height, caja.w / foto.width, caja.h / foto.height].map(v => +v.toFixed(4)),
-    cajaAuto: cajaAuto && [cajaAuto.x / foto.width, cajaAuto.y / foto.height, cajaAuto.w / foto.width, cajaAuto.h / foto.height].map(v => +v.toFixed(4)), detConf };
-  await tx("lecturas", "readwrite", s => s.put(rec));
-  toast(rec.corregido ? "Guardada con tu corrección ✓" : "Guardada ✓");
+const norm = c => c && [c.x / foto.width, c.y / foto.height, c.w / foto.width, c.h / foto.height].map(v => +v.toFixed(4));
+async function guardar() {
+  if (!slots.length || !slots.every(s => s.fijada && s.caja && valido(valorDe(s)))) return;
+  const base = Date.now(), fb = fotoBlob || await fotoChica(), fecha = new Date().toISOString();
+  const recs = slots.map((s, i) => ({
+    id: base + i, grupo: base, equipo: s.eq, rol: s.rol, sugerido: s.fijada.txt, confianza: +s.fijada.conf.toFixed(3), valor: valorDe(s),
+    corregido: valorDe(s) !== s.fijada.txt, fecha, modelo: s.fijada.modelo, ms: Math.round(s.fijada.ms), exportada: false, multi, img: s.fijada.blob,
+    foto: fb, caja: norm(s.caja), cajaAuto: norm(s.auto), detConf: s.conf, ambos: ambos() }));
+  await tx("lecturas", "readwrite", st => recs.forEach(r => st.put(r)));
+  const corr = recs.filter(r => r.corregido).length;
+  toast(recs.length > 1 ? `Guardadas patrón y UBP${corr ? " (con tu corrección)" : ""} ✓` : corr ? "Guardada con tu corrección ✓" : "Guardada ✓");
   contar(true); reiniciar();
 }
 // Mantener presionado ~0,7 s para confirmar (evita guardar una lectura equivocada con un toque al pasar).
@@ -525,18 +652,25 @@ const ok = $("ok");
 const soltar = () => ok.classList.remove("carga");
 ok.addEventListener("pointerdown", () => { if (!ok.disabled) ok.classList.add("carga"); });
 ["pointerup", "pointerleave", "pointercancel"].forEach(e => ok.addEventListener(e, soltar));
-ok.querySelector(".fill").addEventListener("transitionend", () => { if (ok.classList.contains("carga")) { soltar(); guardar(fijada.txt); } });
+ok.querySelector(".fill").addEventListener("transitionend", () => { if (ok.classList.contains("carga")) { soltar(); guardar(); } });
 $("reint").onclick = reiniciar;
 $("disparo").onclick = disparar;
+$("swap").onclick = intercambiar;
 $("escribir").onclick = async () => {
   if (modo === "vivo") await disparar();
-  if (!fijada) return;
-  $("corr").classList.add("si"); $("corrIn").value = fijada.txt; $("corrIn").focus(); $("corrIn").select();
+  const s = slotAct(); if (!s || !s.fijada) return;
+  $("corr").classList.add("si"); $("corrIn").value = valorDe(s); $("corrIn").focus(); $("corrIn").select();
 };
 $("corrOk").onclick = () => {
   const v = $("corrIn").value.trim().replace(",", ".");
   if (!valido(v)) { toast("Solo números, punto y signo menos"); return; }
-  guardar(v);
+  const s = slotAct(); if (!s) return;
+  if (!ambos()) { s.valor = v; guardar(); return; }
+  // Ambos: se corrige el recuadro activo; si el otro todavía no tiene un valor válido, pasa a ese
+  s.valor = v === s.fijada.txt ? null : v; $("corr").classList.remove("si"); dibujarCallout(s);
+  const otro = slots.find(x => x !== s && !valido(valorDe(x)));
+  if (otro) { marcarActivo(slots.indexOf(otro)); actualizarPanel(); $("escribir").onclick(); }
+  else { actualizarPanel(); toast(`${NOMBRE_ROL[s.rol]} corregido · mantené para guardar los 2`); }
 };
 
 // ---------- Hoja de datos ----------
@@ -585,12 +719,15 @@ $("exportar").onclick = async () => {
   const L = (await todas()).filter(l => !l.exportada);
   if (!L.length) { toast("No hay lecturas nuevas para exportar"); return; }
   const filas = [["recorte", "valor", "grupo", "equipo", "foto_original", "sugerido", "confianza", "corregido", "rol", "fecha", "modelo", "ms", "foto", "caja_x", "caja_y", "caja_w", "caja_h", "multi", "auto_x", "auto_y", "auto_w", "auto_h", "auto_conf"]];
-  const arch = [];
+  const arch = [], fotosYa = new Set();
   for (const l of L) {
     const nom = `c_${l.id}.jpg`;
     arch.push({ nombre: "recortes/" + nom, datos: new Uint8Array(await l.img.arrayBuffer()) });
     let nf = "", cj = ["", "", "", ""];
-    if (l.foto) { nf = `f_${l.id}.jpg`; arch.push({ nombre: "fotos/" + nf, datos: new Uint8Array(await l.foto.arrayBuffer()) }); cj = l.caja; }
+    if (l.foto) {   // patrón y UBP de la misma foto apuntan al mismo archivo: así el detector ve los dos recuadros juntos
+      nf = `f_${l.grupo || l.id}.jpg`; cj = l.caja;
+      if (!fotosYa.has(nf)) { fotosYa.add(nf); arch.push({ nombre: "fotos/" + nf, datos: new Uint8Array(await l.foto.arrayBuffer()) }); }
+    }
     filas.push([nom, l.valor, l.fecha.slice(0, 7), l.equipo, "celular", l.sugerido, l.confianza, l.corregido ? 1 : 0, l.rol, l.fecha, l.modelo, l.ms, nf, ...cj, l.multi == null ? "" : (l.multi ? 1 : 0), ...(l.cajaAuto || ["", "", "", ""]), l.detConf == null ? "" : l.detConf]);  // vacío = guardada antes de v3.1 (sin dato)
   }
   arch.unshift({ nombre: "etiquetas.csv", datos: new TextEncoder().encode(filas.map(f => f.map(csvCampo).join(",")).join("\n") + "\n") });
@@ -625,12 +762,33 @@ $("borrar").onclick = async () => {
 };
 
 // ---------- Selector de equipo y rol ----------
-$("equipo").onchange = () => { $("equipoOtro").style.display = $("equipo").value === "__otro" ? "" : "none"; try { localStorage.setItem("lc_equipo", $("equipo").value); } catch (e) {} cargarMulti(); if (modo === "foto" && caja) leerCaja(); };
-$("equipoOtro").onchange = cargarMulti;
+$("equipo2").innerHTML = $("equipo").innerHTML;
+function alCambiarEquipo() {
+  for (const id of ["equipo", "equipo2"]) $(id + "Otro").style.display = $(id).value === "__otro" ? "" : "none";
+  try { localStorage.setItem("lc_equipo", $("equipo").value); localStorage.setItem("lc_equipo2", $("equipo2").value); } catch (e) {}
+  cargarMulti();
+  if (modo === "foto" && slots.length) { slots.forEach(x => x.eq = equipoDe(x.rol)); leerTodos(); }
+}
+for (const id of ["equipo", "equipo2", "equipoOtro", "equipo2Otro"]) $(id).onchange = alCambiarEquipo;
 $("multi").onclick = () => ponerMulti(!multi, true);
-document.querySelectorAll("#rol button").forEach(b => b.onclick = () => { rol = b.dataset.r; $("rol").classList.toggle("inst", rol === "instrumento"); });
-try { const e = localStorage.getItem("lc_equipo"); if (e) { $("equipo").value = e; $("equipo").onchange(); } } catch (e) {}
-cargarMulti();
+function ponerRol(r) {
+  rol = r; const i = ["patron", "instrumento", "ambos"].indexOf(r);
+  $("rol").classList.toggle("r1", i === 1); $("rol").classList.toggle("r2", i === 2);
+  document.querySelector(".app").classList.toggle("amb", r === "ambos");
+  try { localStorage.setItem("lc_rol", r); } catch (e) {}
+  if (modo === "vivo") reiniciar();
+  requestAnimationFrame(ponerGuia);
+}
+document.querySelectorAll("#rol button").forEach(b => b.onclick = () => {
+  if (modo === "foto" && b.dataset.r !== rol && (b.dataset.r === "ambos" || rol === "ambos")) { toast("Para cambiar a/desde Ambos, sacá otra foto"); return; }
+  if (modo === "foto" && slots.length === 1) { slots[0].rol = b.dataset.r; rol = b.dataset.r; ponerRol(b.dataset.r); return; }
+  ponerRol(b.dataset.r);
+});
+try {
+  const e = localStorage.getItem("lc_equipo"), e2 = localStorage.getItem("lc_equipo2"), r = localStorage.getItem("lc_rol");
+  if (e) $("equipo").value = e; if (e2) $("equipo2").value = e2; if (r && ["patron", "instrumento", "ambos"].includes(r)) rol = r;
+} catch (e) {}
+alCambiarEquipo(); ponerRol(rol);
 
 // ---------- Arranque ----------
 (async () => {

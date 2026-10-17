@@ -28,6 +28,8 @@ button,input,select{font-family:inherit}
 .rol.r1 .bola{transform:translateX(64px)}.rol.r2 .bola{transform:translateX(128px)}
 /* modo Ambos: segundo selector (equipo del UBP) y etiquetas */
 .sel2{display:none}.app.amb .sel2{display:flex}
+/* magnitud y unidad (filtradas por el patrón) */
+.sel select.un{flex:0 0 104px}
 .et{flex-shrink:0;align-self:center;font-size:11px;font-weight:800;letter-spacing:.04em;border-radius:8px;padding:4px 7px;color:#111;background:var(--n2);display:none}
 .et.u{background:var(--azul)}.app.amb .et{display:inline-block}
 .visor{position:relative;flex:1;min-height:0;overflow:hidden;background:#000}
@@ -108,6 +110,7 @@ video{transform-origin:50% 50%;transition:transform .15s linear}
 .big .lin{opacity:.55;transition:opacity .2s}.big .lin.act{opacity:1}
 .big .lin i{font-style:normal;font-family:system-ui;font-size:11px;font-weight:800;border-radius:6px;padding:2px 6px;margin-right:8px;vertical-align:4px;background:var(--n2);color:#111}
 .big .lin i.u{background:var(--azul)}.big .lin small{font-size:12px;margin-left:6px;color:var(--t2)}
+.big small.un{font-family:system-ui;font-size:15px;font-weight:600;color:var(--t2);margin-left:8px}.big.doble small.un{font-size:12px;margin-left:6px}
 @keyframes sube{from{transform:translateY(8px);opacity:.2}to{transform:none;opacity:1}}
 .meta{text-align:right;font-size:12px;color:var(--t2);line-height:1.4}
 /* El aviso flota sobre el borde inferior de la foto: no cambia el alto del visor, así la foto y el recuadro no saltan al leer. */
@@ -160,15 +163,15 @@ video{transform-origin:50% 50%;transition:transform .15s linear}
 <div class="app">
   <div class="cab">
     <span class="ico" id="ico"></span>
-    <div><b>Lector de campo <span style="font-size:11px;color:#FF8D21;font-weight:700">v3.4 · patrón y UBP juntos</span></b><small id="estModelo">Cargando modelo…</small></div>
+    <div><b>Lector de campo <span style="font-size:11px;color:#FF8D21;font-weight:700">v3.5 · magnitud y unidad</span></b><small id="estModelo">Cargando modelo…</small></div>
     <button class="chipN" id="abrirDatos">Datos <i id="nGuard">0</i></button>
   </div>
   <div class="sel">
     <span class="et">Patrón</span>
     <select id="equipo">
-      <option>SPMK700</option><option>KIMO MP 210</option><option>Vaisala HM70</option><option>Vaisala HMT330</option>
+      <option>SPMK700</option><option>KIMO MP 210</option><option>Vaisala HM70</option><option>Vaisala HMT330</option><option>Vaisala RFL100-HMP110</option>
       <option>Isotech</option><option>Mettler Toledo M200</option><option>Mettler Toledo M800</option><option>Veris</option>
-      <option>Presys</option><option>Balanza</option><option value="__otro">Otro…</option>
+      <option>Presys</option><option>Balanza</option><option>TFA</option><option value="__otro">Otro…</option>
     </select>
     <input id="equipoOtro" placeholder="Equipo" style="display:none">
     <div class="rol" id="rol"><span class="bola"></span><button data-r="patron">Patrón</button><button data-r="instrumento">UBP</button><button data-r="ambos">Ambos</button></div>
@@ -177,6 +180,10 @@ video{transform-origin:50% 50%;transition:transform .15s linear}
     <span class="et u">UBP</span>
     <select id="equipo2"></select>
     <input id="equipo2Otro" placeholder="Equipo del UBP" style="display:none">
+  </div>
+  <div class="sel" id="sel3">
+    <select id="magnitud" aria-label="Magnitud"></select>
+    <select id="unidad" class="un" aria-label="Unidad"></select>
   </div>
   <div class="visor" id="visor">
     <video id="video" playsinline muted autoplay></video>
@@ -265,6 +272,38 @@ const equipoDe = r => ambos() && r === "instrumento" ? equipo2() : equipo();
 const tipoDe = eq => /SPMK/i.test(eq) ? "spmk" : "general";
 const tipoModelo = () => tipoDe(equipo());
 
+// ---------- Magnitud y unidad ----------
+// Mismo orden que MAGS en entrenar_detector.py (canal 1 + i del detector). Agregar al final, nunca en el medio.
+const MAGS = [
+  { id: "temp", n: "Temperatura", u: ["°C", "°F"] },
+  { id: "hum", n: "Humedad", u: ["%HR"] },
+  { id: "pres", n: "Presión", u: ["bar", "mbar", "kPa", "MPa", "psi", "kgf/cm²", "mmHg"] },
+  { id: "pdif", n: "Presión diferencial", u: ["Pa", "hPa", "mbar", "kPa", "mmH₂O", "inH₂O"] },
+  { id: "cond", n: "Conductividad", u: ["µS/cm", "mS/cm"] },
+  { id: "ph", n: "pH", u: ["pH"] },
+  { id: "orp", n: "ORP", u: ["mV"] },
+  { id: "masa", n: "Masa", u: ["g", "kg", "mg"] },
+];
+// Qué mide cada patrón (el resto: todas)
+const MAG_EQ = [[/SPMK/i, ["pres"]], [/KIMO/i, ["pdif"]], [/ISOTECH/i, ["temp"]], [/VAISALA/i, ["hum", "temp"]],
+  [/METTLER/i, ["cond", "ph", "orp", "temp"]], [/BALANZA/i, ["masa"]]];
+const magsDe = eq => { const m = MAG_EQ.find(([re]) => re.test(eq)); return m ? m[1] : MAGS.map(x => x.id); };
+const magActual = () => $("magnitud").value;
+const unidadActual = () => $("unidad").value;
+const magInfo = id => MAGS.find(x => x.id === id);
+function llenarUnidades() {
+  const m = magInfo(magActual()); if (!m) return;
+  let u = null; try { u = localStorage.getItem("lc_uni_" + m.id); } catch (e) {}
+  $("unidad").innerHTML = m.u.map(x => `<option>${x}</option>`).join(""); if (u && m.u.includes(u)) $("unidad").value = u;
+  $("unidad").disabled = m.u.length < 2;
+}
+function llenarMagnitudes() {
+  const eq = equipo(), ids = magsDe(eq); let g = null; try { g = localStorage.getItem("lc_mag_" + eq); } catch (e) {}
+  $("magnitud").innerHTML = ids.map(id => `<option value="${id}">${magInfo(id).n}</option>`).join("");
+  if (g && ids.includes(g)) $("magnitud").value = g;
+  $("magnitud").disabled = ids.length < 2; llenarUnidades();
+}
+
 // ---------- Detector: encuentra dónde está el número en la foto ----------
 // Misma cuenta que entrenar_detector.py: foto en un cuadrado de 320 con gris, normalización ImageNet,
 // celdas de 8 px que dicen "acá hay número" + distancia a los 4 bordes (en cuartos de imagen).
@@ -285,7 +324,7 @@ function detector() {
     return s;
   })().catch(e => { $("infoD").textContent = "no cargó: " + e.message; return null; });
 }
-async function detectar() {
+async function detectar(mag) {
   const s = await detector(); if (!s) return null;
   const L = DET.lado, N = L * L, x = cDet.getContext("2d", { willReadFrequently: true });
   const k = L / Math.max(foto.width, foto.height), nw = Math.round(foto.width * k), nh = Math.round(foto.height * k);
@@ -295,9 +334,16 @@ async function detectar() {
   const d = x.getImageData(0, 0, L, L).data, a = new Float32Array(3 * N);
   for (let i = 0; i < N; i++) for (let c = 0; c < 3; c++) a[c * N + i] = (d[i * 4 + c] / 255 - DET.media[c]) / DET.desv[c];
   const t0 = performance.now(), o = (await s.run({ imagen: new ort.Tensor("float32", a, [1, 3, L, L]) })).salida;
-  const G = o.dims[2], GG = G * G, z = o.data, ms = performance.now() - t0;
+  const C = o.dims[1], G = o.dims[2], GG = G * G, todo = o.data, ms = performance.now() - t0;
+  // Detector por magnitud (v3.5): canal 0 general, 1 + i de cada magnitud, los 4 últimos los bordes.
+  // Se usa el de la magnitud elegida si ya aprendió algo; si no, el general. (Detector de antes: 5 canales, solo general.)
+  const maxDe = c => { let m = 0; for (let i = c * GG; i < (c + 1) * GG; i++) if (todo[i] > m) m = todo[i]; return m; };
+  const im = MAGS.findIndex(x => x.id === mag);
+  const canal = C > 5 && im >= 0 && 1 + im < C - 4 && maxDe(1 + im) >= DET.umbral ? 1 + im : 0;
+  const z = todo.subarray(canal * GG, (canal + 1) * GG), bordes = todo.subarray((C - 4) * GG);
+  const nombreCanal = canal ? MAGS[canal - 1].id : "general";
   let conf = 0; for (let i = 0; i < GG; i++) if (z[i] > conf) conf = z[i];
-  if (conf < DET.umbral) return { cajas: [], conf, ms };
+  if (conf < DET.umbral) return { cajas: [], conf, ms, canal: nombreCanal };
   // celdas con puntaje alto, agrupadas por vecindad: cada grupo es un número; se ordenan del más fuerte al más débil
   const visto = new Uint8Array(GG), grupos = [];
   for (let i0 = 0; i0 < GG; i0++) {
@@ -318,14 +364,14 @@ async function detectar() {
     let x0 = 0, y0 = 0, x1 = 0, y1 = 0, tot = 0, cmax = 0;
     for (const i of g.celdas) {
       const w = z[i], cx = (i % G + 0.5) * DET.paso, cy = (((i / G) | 0) + 0.5) * DET.paso;
-      x0 += w * (cx - z[GG + i] * f); y0 += w * (cy - z[2 * GG + i] * f); x1 += w * (cx + z[3 * GG + i] * f); y1 += w * (cy + z[4 * GG + i] * f);
+      x0 += w * (cx - bordes[i] * f); y0 += w * (cy - bordes[GG + i] * f); x1 += w * (cx + bordes[2 * GG + i] * f); y1 += w * (cy + bordes[3 * GG + i] * f);
       tot += w; if (w > cmax) cmax = w;
     }
     x0 = Math.max(0, (x0 / tot - ox) / k); y0 = Math.max(0, (y0 / tot - oy) / k);
     x1 = Math.min(foto.width, (x1 / tot - ox) / k); y1 = Math.min(foto.height, (y1 / tot - oy) / k);
     if (x1 - x0 >= 4 && y1 - y0 >= 4) cajas.push({ caja: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, conf: cmax });
   }
-  return { cajas, conf: cajas.length ? cajas[0].conf : conf, ms };
+  return { cajas, conf: cajas.length ? cajas[0].conf : conf, ms, canal: nombreCanal };
 }
 
 // ---------- Marca "más de un valor" ----------
@@ -482,11 +528,15 @@ async function disparar() {
   $("visor").classList.add("modoFoto"); $("visor").classList.toggle("doble", ambos()); $("panel").classList.add("foto");
   slots = ambos() ? [nuevoSlot(0, "patron"), nuevoSlot(1, "instrumento")] : [nuevoSlot(0, rol)];
   marcarActivo(0);
-  // Propuesta inicial: la del detector si hay y está seguro; si no, el marco guía (en píxeles de la foto).
+  if (await proponer()) await leerTodos();
+}
+// Propuesta de recuadros: la del detector (con el mapa de la magnitud elegida) si hay y está seguro; si no, el marco guía.
+async function proponer() {
   const yo = ++leyendo; texto(ambos() ? "Buscando los dos números…" : "Buscando el número…");
-  let det = null; try { det = await detectar(); } catch (e) { det = null; }
-  if (yo !== leyendo || modo !== "foto" || (arrastre && arrastre.mov)) return;   // si ya lo estás marcando vos, manda lo tuyo
+  let det = null; try { det = await detectar(magActual()); } catch (e) { det = null; }
+  if (yo !== leyendo || modo !== "foto" || (arrastre && arrastre.mov)) return false;   // si ya lo estás marcando vos, manda lo tuyo
   const props = det ? det.cajas : [];
+  slots.forEach(s => { s.auto = null; s.origen = "marco"; s.canal = det ? det.canal : null; });
   if (!ambos()) {
     const s = slots[0]; s.conf = det ? +det.conf.toFixed(3) : null;
     if (props[0]) { s.auto = { ...props[0].caja }; s.origen = "auto"; s.conf = +props[0].conf.toFixed(3); ponerCaja(s, s.auto); }
@@ -508,7 +558,7 @@ async function disparar() {
     });
   }
   $("swap").classList.toggle("si", ambos());
-  await leerTodos();
+  return true;
 }
 // ⇄ Patrón ↔ UBP: intercambia los recuadros (cada uno se vuelve a leer con el modelo de su equipo) y lo recuerda para este par de equipos.
 async function intercambiar() {
@@ -585,8 +635,8 @@ function actualizarPanel() {
   const b = $("big"), av = [];
   if (ambos()) {
     b.classList.add("doble");
-    b.innerHTML = slots.map(x => `<span class="lin${x === s ? " act" : ""}"><i class="${x.rol === "instrumento" ? "u" : "p"}">${x.rol === "instrumento" ? "U" : "P"}</i>${valorDe(x) || "—"}${x.valor != null ? "<small>✎</small>" : ""}</span>`).join("");
-  } else { b.classList.remove("doble"); b.textContent = valorDe(s) || "—"; }
+    b.innerHTML = slots.map(x => `<span class="lin${x === s ? " act" : ""}"><i class="${x.rol === "instrumento" ? "u" : "p"}">${x.rol === "instrumento" ? "U" : "P"}</i>${valorDe(x) || "—"}${valorDe(x) ? `<small class="un">${unidadActual()}</small>` : ""}${x.valor != null ? "<small>✎</small>" : ""}</span>`).join("");
+  } else { b.classList.remove("doble"); b.innerHTML = valorDe(s) ? `${valorDe(s)}<small class="un">${unidadActual()}</small>` : "—"; }
   b.classList.remove("nuevo"); void b.offsetWidth; b.classList.add("nuevo");
   const f = s.fijada;
   $("meta").innerHTML = f ? `${ambos() ? NOMBRE_ROL[s.rol] + " · " : ""}confianza ${Math.round(f.conf * 100)}%<br>${f.modelo === "spmk" ? "especialista SPMK" : "modelo general"} · ${Math.round(f.ms)} ms` : "Leyendo…";
@@ -616,7 +666,9 @@ function dibujarCallout(s) {
     <div class="pt" style="left:${cx}px;top:${cy}px"></div>
     <div class="chip" style="left:${cx - 16}px;top:${cy}px">${tag}${r.txt}<small>${s.valor != null ? "✎" : Math.round(r.conf * 100) + "%"}</small></div>`;
   const ch = co.querySelector(".chip");
-  if (cx - 16 - ch.offsetWidth < 6) { ch.classList.add("der"); ch.style.left = cx + 16 + "px"; }
+  // Ambos: el recuadro de la derecha lleva la etiqueta a su derecha, para no taparse con la del otro
+  const otro = ambos() && slots.find(x => x !== s && x.caja), aDer = otro && s.caja.x + s.caja.w / 2 > otro.caja.x + otro.caja.w / 2;
+  if ((aDer && cx + 16 + ch.offsetWidth < v.width - 6) || cx - 16 - ch.offsetWidth < 6) { ch.classList.add("der"); ch.style.left = cx + 16 + "px"; }
   requestAnimationFrame(() => requestAnimationFrame(() => co.classList.add("on")));
 }
 function reiniciar() {
@@ -641,7 +693,8 @@ async function guardar() {
   const recs = slots.map((s, i) => ({
     id: base + i, grupo: base, equipo: s.eq, rol: s.rol, sugerido: s.fijada.txt, confianza: +s.fijada.conf.toFixed(3), valor: valorDe(s),
     corregido: valorDe(s) !== s.fijada.txt, fecha, modelo: s.fijada.modelo, ms: Math.round(s.fijada.ms), exportada: false, multi, img: s.fijada.blob,
-    foto: fb, caja: norm(s.caja), cajaAuto: norm(s.auto), detConf: s.conf, ambos: ambos() }));
+    foto: fb, caja: norm(s.caja), cajaAuto: norm(s.auto), detConf: s.conf, detCanal: s.auto ? s.canal : null, ambos: ambos(),
+    magnitud: magActual(), unidad: unidadActual() }));
   await tx("lecturas", "readwrite", st => recs.forEach(r => st.put(r)));
   const corr = recs.filter(r => r.corregido).length;
   toast(recs.length > 1 ? `Guardadas patrón y UBP${corr ? " (con tu corrección)" : ""} ✓` : corr ? "Guardada con tu corrección ✓" : "Guardada ✓");
@@ -718,7 +771,7 @@ const csvCampo = v => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""
 $("exportar").onclick = async () => {
   const L = (await todas()).filter(l => !l.exportada);
   if (!L.length) { toast("No hay lecturas nuevas para exportar"); return; }
-  const filas = [["recorte", "valor", "grupo", "equipo", "foto_original", "sugerido", "confianza", "corregido", "rol", "fecha", "modelo", "ms", "foto", "caja_x", "caja_y", "caja_w", "caja_h", "multi", "auto_x", "auto_y", "auto_w", "auto_h", "auto_conf"]];
+  const filas = [["recorte", "valor", "grupo", "equipo", "foto_original", "sugerido", "confianza", "corregido", "rol", "fecha", "modelo", "ms", "foto", "caja_x", "caja_y", "caja_w", "caja_h", "multi", "auto_x", "auto_y", "auto_w", "auto_h", "auto_conf", "magnitud", "unidad", "auto_canal"]];
   const arch = [], fotosYa = new Set();
   for (const l of L) {
     const nom = `c_${l.id}.jpg`;
@@ -728,7 +781,7 @@ $("exportar").onclick = async () => {
       nf = `f_${l.grupo || l.id}.jpg`; cj = l.caja;
       if (!fotosYa.has(nf)) { fotosYa.add(nf); arch.push({ nombre: "fotos/" + nf, datos: new Uint8Array(await l.foto.arrayBuffer()) }); }
     }
-    filas.push([nom, l.valor, l.fecha.slice(0, 7), l.equipo, "celular", l.sugerido, l.confianza, l.corregido ? 1 : 0, l.rol, l.fecha, l.modelo, l.ms, nf, ...cj, l.multi == null ? "" : (l.multi ? 1 : 0), ...(l.cajaAuto || ["", "", "", ""]), l.detConf == null ? "" : l.detConf]);  // vacío = guardada antes de v3.1 (sin dato)
+    filas.push([nom, l.valor, l.fecha.slice(0, 7), l.equipo, "celular", l.sugerido, l.confianza, l.corregido ? 1 : 0, l.rol, l.fecha, l.modelo, l.ms, nf, ...cj, l.multi == null ? "" : (l.multi ? 1 : 0), ...(l.cajaAuto || ["", "", "", ""]), l.detConf == null ? "" : l.detConf, l.magnitud || "", l.unidad || "", l.detCanal || ""]);  // vacío = guardada antes de v3.1 (sin dato)
   }
   arch.unshift({ nombre: "etiquetas.csv", datos: new TextEncoder().encode(filas.map(f => f.map(csvCampo).join(",")).join("\n") + "\n") });
   const ah = new Date(), dd = n => String(n).padStart(2, "0");   // hora local del teléfono (no UTC)
@@ -766,9 +819,19 @@ $("equipo2").innerHTML = $("equipo").innerHTML;
 function alCambiarEquipo() {
   for (const id of ["equipo", "equipo2"]) $(id + "Otro").style.display = $(id).value === "__otro" ? "" : "none";
   try { localStorage.setItem("lc_equipo", $("equipo").value); localStorage.setItem("lc_equipo2", $("equipo2").value); } catch (e) {}
-  cargarMulti();
+  cargarMulti(); llenarMagnitudes();
   if (modo === "foto" && slots.length) { slots.forEach(x => x.eq = equipoDe(x.rol)); leerTodos(); }
 }
+// Cambiar la magnitud con la foto quieta: si los recuadros son los automáticos, se vuelven a proponer con el mapa de esa magnitud.
+async function alCambiarMagnitud() {
+  try { localStorage.setItem("lc_mag_" + equipo(), magActual()); } catch (e) {}
+  llenarUnidades();
+  if (modo === "foto" && slots.length) {
+    if (slots.every(x => x.origen !== "mano") && await proponer()) await leerTodos(); else actualizarPanel();
+  }
+}
+$("magnitud").onchange = alCambiarMagnitud;
+$("unidad").onchange = () => { try { localStorage.setItem("lc_uni_" + magActual(), unidadActual()); } catch (e) {} if (modo === "foto" && slots.length) actualizarPanel(); };
 for (const id of ["equipo", "equipo2", "equipoOtro", "equipo2Otro"]) $(id).onchange = alCambiarEquipo;
 $("multi").onclick = () => ponerMulti(!multi, true);
 function ponerRol(r) {

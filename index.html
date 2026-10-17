@@ -136,7 +136,7 @@ video{transform-origin:50% 50%;transition:transform .15s linear}
 <div class="app">
   <div class="cab">
     <span class="ico" id="ico"></span>
-    <div><b>Lector de campo <span style="font-size:11px;color:#FF8D21;font-weight:700">v3.2 · cámara + recuadros</span></b><small id="estModelo">Cargando modelo…</small></div>
+    <div><b>Lector de campo <span style="font-size:11px;color:#FF8D21;font-weight:700">v3.3 · recuadro automático</span></b><small id="estModelo">Cargando modelo…</small></div>
     <button class="chipN" id="abrirDatos">Datos <i id="nGuard">0</i></button>
   </div>
   <div class="sel">
@@ -179,12 +179,12 @@ video{transform-origin:50% 50%;transition:transform .15s linear}
   <table class="tab" id="tabla"></table>
   <div class="acc">
     <button class="bt pr" id="exportar">⇪ Exportar tanda (zip) para el Drive</button>
-    <label class="bt" id="lblModelo">⟳ Actualizar modelo (.onnx desde el Drive)<input type="file" id="archModelo" accept=".onnx" hidden></label>
+    <label class="bt" id="lblModelo">⟳ Actualizar modelo o detector (.onnx desde el Drive)<input type="file" id="archModelo" accept=".onnx" hidden></label>
     <button class="bt" id="restaurar">↺ Volver a los modelos originales</button>
     <button class="bt peligro" id="borrar">🗑 Borrar las ya exportadas</button>
   </div>
   <p class="nota">Las lecturas quedan guardadas en este teléfono hasta que las exportes y las borres vos. Nada se sube solo.<br>
-  Modelo general: <span id="infoG">—</span> · Especialista SPMK700: <span id="infoS">—</span></p>
+  Modelo general: <span id="infoG">—</span> · Especialista SPMK700: <span id="infoS">—</span><br>Detector de recuadro: <span id="infoD">—</span></p>
 </section>
 
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
@@ -228,6 +228,66 @@ async function sesion(tipo) {
 const equipo = () => $("equipo").value === "__otro" ? ($("equipoOtro").value.trim() || "Otro") : $("equipo").value;
 const tipoModelo = () => /SPMK/i.test(equipo()) ? "spmk" : "general";
 
+// ---------- Detector: encuentra dónde está el número en la foto ----------
+// Misma cuenta que entrenar_detector.py: foto en un cuadrado de 320 con gris, normalización ImageNet,
+// celdas de 8 px que dicen "acá hay número" + distancia a los 4 bordes (en cuartos de imagen).
+// Si no hay detector todavía, o no está seguro, se usa el marco guía como antes.
+const DET = { arch: "modelos/detector.onnx", enSitio: false, lado: 320, paso: 8, esc: 4, umbral: 0.4, gris: 127, media: [0.485, 0.456, 0.406], desv: [0.229, 0.224, 0.225] };
+let detIntento = null;
+const cDet = Object.assign(document.createElement("canvas"), { width: DET.lado, height: DET.lado });
+function detector() {
+  return detIntento ||= (async () => {
+    let buf = await tx("modelos", "readonly", s => s.get("detector")), origen = "actualizado";
+    if (!buf) {
+      const r = DET.enSitio ? await fetch(DET.arch).catch(() => null) : null;   // hasta publicar uno, se carga desde el celular
+      if (!r || !r.ok) { $("infoD").textContent = "todavía no cargado (se usa el marco)"; return null; }
+      buf = await r.arrayBuffer(); origen = "original";
+    }
+    const t0 = performance.now(), s = await ort.InferenceSession.create(buf, { executionProviders: ["wasm"] });
+    $("infoD").textContent = `${origen}, ${(buf.byteLength / 1048576).toFixed(1)} MB, cargó en ${Math.round(performance.now() - t0)} ms`;
+    return s;
+  })().catch(e => { $("infoD").textContent = "no cargó: " + e.message; return null; });
+}
+async function detectar() {
+  const s = await detector(); if (!s) return null;
+  const L = DET.lado, N = L * L, x = cDet.getContext("2d", { willReadFrequently: true });
+  const k = L / Math.max(foto.width, foto.height), nw = Math.round(foto.width * k), nh = Math.round(foto.height * k);
+  const ox = Math.floor((L - nw) / 2), oy = Math.floor((L - nh) / 2);
+  x.fillStyle = `rgb(${DET.gris},${DET.gris},${DET.gris})`; x.fillRect(0, 0, L, L);
+  x.imageSmoothingQuality = "high"; x.drawImage(foto, 0, 0, foto.width, foto.height, ox, oy, nw, nh);
+  const d = x.getImageData(0, 0, L, L).data, a = new Float32Array(3 * N);
+  for (let i = 0; i < N; i++) for (let c = 0; c < 3; c++) a[c * N + i] = (d[i * 4 + c] / 255 - DET.media[c]) / DET.desv[c];
+  const t0 = performance.now(), o = (await s.run({ imagen: new ort.Tensor("float32", a, [1, 3, L, L]) })).salida;
+  const G = o.dims[2], GG = G * G, z = o.data, ms = performance.now() - t0;
+  let conf = 0; for (let i = 0; i < GG; i++) if (z[i] > conf) conf = z[i];
+  if (conf < DET.umbral) return { caja: null, conf, ms };
+  // celdas con puntaje alto, agrupadas por vecindad: se queda con el grupo más fuerte
+  const visto = new Uint8Array(GG); let mejor = null;
+  for (let i0 = 0; i0 < GG; i0++) {
+    if (z[i0] < DET.umbral || visto[i0]) continue;
+    const pila = [i0], celdas = []; visto[i0] = 1;
+    while (pila.length) {
+      const i = pila.pop(), r = (i / G) | 0, q = i % G; celdas.push(i);
+      for (const [rr, qq] of [[r + 1, q], [r - 1, q], [r, q + 1], [r, q - 1]]) {
+        if (rr < 0 || qq < 0 || rr >= G || qq >= G) continue;
+        const j = rr * G + qq; if (!visto[j] && z[j] >= DET.umbral) { visto[j] = 1; pila.push(j); }
+      }
+    }
+    const peso = celdas.reduce((t, i) => t + z[i], 0);
+    if (!mejor || peso > mejor.peso) mejor = { peso, celdas };
+  }
+  let x0 = 0, y0 = 0, x1 = 0, y1 = 0, tot = 0, cmax = 0; const f = L / DET.esc;
+  for (const i of mejor.celdas) {
+    const w = z[i], cx = (i % G + 0.5) * DET.paso, cy = (((i / G) | 0) + 0.5) * DET.paso;
+    x0 += w * (cx - z[GG + i] * f); y0 += w * (cy - z[2 * GG + i] * f); x1 += w * (cx + z[3 * GG + i] * f); y1 += w * (cy + z[4 * GG + i] * f);
+    tot += w; if (w > cmax) cmax = w;
+  }
+  x0 = Math.max(0, (x0 / tot - ox) / k); y0 = Math.max(0, (y0 / tot - oy) / k);
+  x1 = Math.min(foto.width, (x1 / tot - ox) / k); y1 = Math.min(foto.height, (y1 / tot - oy) / k);
+  if (x1 - x0 < 4 || y1 - y0 < 4) return { caja: null, conf: cmax, ms };
+  return { caja: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, conf: cmax, ms };
+}
+
 // ---------- Marca "más de un valor" ----------
 // Se recuerda por equipo (un M800 casi siempre muestra dos valores), pero siempre se ve y se puede cambiar en cada foto.
 let multi = false;
@@ -243,7 +303,7 @@ const valido = t => /^-?\d+(\.\d+)?$/.test(t);
 const vid = $("video"), foto = $("foto");
 const MARG = { i: .42, d: .32, a: .49, b: .47 };   // márgenes alrededor de los números: los mismos de todos los recortes de entrenamiento
 const ASPECTO_NUM = 1.83;                            // proporción típica de un renglón de números
-let fotoBlob = null, rol = "patron", modo = "vivo", zoomHW = false, zoomDig = 1, caja = null, fijada = null, leyendo = 0;
+let fotoBlob = null, rol = "patron", modo = "vivo", zoomHW = false, zoomDig = 1, caja = null, fijada = null, leyendo = 0, cajaAuto = null, detConf = null, origenCaja = "marco";
 function ponerGuia() {
   const v = $("visor").getBoundingClientRect(), w = Math.min(v.width * 0.5, v.height * 0.45 * ASPECTO_NUM), h = w / ASPECTO_NUM;
   Object.assign($("guia").style, { width: w + "px", height: h + "px", left: (v.width - w) / 2 + "px", top: (v.height - h) / 2 - 30 + "px" });
@@ -325,7 +385,8 @@ async function leerCaja() {
   // vista de lo que entra a la red
   const vc = $("vista").getContext("2d"); vc.drawImage(foto, ...Object.values(regionMargen(caja)), 0, 0, MW, MH); $("vista").classList.add("si");
   fijada = { txt: mejor.txt, conf: mejor.conf, ms, blob: await recorteGuardar() };
-  texto(mejor.txt ? "Ajustá las esquinas o arrastrá el recuadro" : "No leí nada: ajustá el recuadro a los números");
+  texto(!mejor.txt ? "No leí nada: ajustá el recuadro a los números"
+    : origenCaja === "auto" ? `Recuadro automático (${Math.round(detConf * 100)}%) · ajustalo si no está justo` : "Ajustá las esquinas o arrastrá el recuadro");
   mostrar(mejor.txt, mejor.conf, ms); dibujarCallout(mejor, aPantalla(caja));
 }
 function recorteGuardar() {
@@ -351,10 +412,18 @@ async function disparar() {
   $("disparo").classList.add("pulsa"); setTimeout(() => $("disparo").classList.remove("pulsa"), 250);
   foto.hidden = false; requestAnimationFrame(() => foto.classList.add("si"));
   $("visor").classList.add("modoFoto"); $("panel").classList.add("foto");
-  // Propuesta inicial: el marco guía, en píxeles de la foto.
-  const v = $("visor").getBoundingClientRect(), g = $("guia").getBoundingClientRect();
-  const p0 = aFoto(g.left - v.left, g.top - v.top), p1 = aFoto(g.right - v.left, g.bottom - v.top);
-  ponerCaja({ x: p0.x, y: p0.y, w: p1.x - p0.x, h: p1.y - p0.y });
+  // Propuesta inicial: la del detector si hay y está seguro; si no, el marco guía (en píxeles de la foto).
+  const yo = ++leyendo; texto("Buscando el número…");
+  let det = null; try { det = await detectar(); } catch (e) { det = null; }
+  if (yo !== leyendo || modo !== "foto" || (arrastre && arrastre.mov)) return;   // si ya lo estás marcando vos, manda lo tuyo
+  detConf = det ? +det.conf.toFixed(3) : null;
+  cajaAuto = det && det.caja ? { ...det.caja } : null; origenCaja = cajaAuto ? "auto" : "marco";
+  if (cajaAuto) ponerCaja(cajaAuto);
+  else {
+    const v = $("visor").getBoundingClientRect(), g = $("guia").getBoundingClientRect();
+    const p0 = aFoto(g.left - v.left, g.top - v.top), p1 = aFoto(g.right - v.left, g.bottom - v.top);
+    ponerCaja({ x: p0.x, y: p0.y, w: p1.x - p0.x, h: p1.y - p0.y });
+  }
   await leerCaja();
 }
 // Ajustar el recuadro con el dedo sobre la foto quieta:
@@ -399,7 +468,7 @@ $("visor").addEventListener("pointermove", e => {
   }
   L = lim(L, fx0, fx1); R = lim(R, fx0, fx1); T = lim(T, fy0, fy1); B = lim(B, fy0, fy1);
   const a = aFoto(L, T), b = aFoto(R, B);
-  if (!arrastre.mov) { arrastre.mov = true; $("co").className = "co"; $("caja").classList.add("activa"); }
+  if (!arrastre.mov) { arrastre.mov = true; origenCaja = "mano"; $("co").className = "co"; $("caja").classList.add("activa"); }
   ponerCaja({ x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y });
 });
 // Si el visor cambia de tamaño (avisos, teclado), se reacomodan el recuadro y el callout.
@@ -429,7 +498,7 @@ function dibujarCallout(r, p) {
   requestAnimationFrame(() => requestAnimationFrame(() => $("co").classList.add("on")));
 }
 function reiniciar() {
-  leyendo++; modo = "vivo"; caja = null; fijada = null;
+  leyendo++; modo = "vivo"; caja = null; fijada = null; cajaAuto = null; detConf = null; origenCaja = "marco";
   $("co").className = "co"; $("caja").hidden = true; $("vista").classList.remove("si");
   foto.classList.remove("si"); setTimeout(() => { if (modo === "vivo") foto.hidden = true; }, 300);
   $("visor").classList.remove("modoFoto"); $("panel").classList.remove("foto");
@@ -445,7 +514,8 @@ async function guardar(valor) {
   const rec = { id: Date.now(), equipo: equipo(), rol, sugerido: fijada.txt, confianza: +fijada.conf.toFixed(3), valor,
     corregido: valor !== fijada.txt, fecha: new Date().toISOString(), modelo: tipoModelo(), ms: Math.round(fijada.ms), exportada: false, multi, img: fijada.blob,
     foto: fotoBlob || await fotoChica(),
-    caja: [caja.x / foto.width, caja.y / foto.height, caja.w / foto.width, caja.h / foto.height].map(v => +v.toFixed(4)) };
+    caja: [caja.x / foto.width, caja.y / foto.height, caja.w / foto.width, caja.h / foto.height].map(v => +v.toFixed(4)),
+    cajaAuto: cajaAuto && [cajaAuto.x / foto.width, cajaAuto.y / foto.height, cajaAuto.w / foto.width, cajaAuto.h / foto.height].map(v => +v.toFixed(4)), detConf };
   await tx("lecturas", "readwrite", s => s.put(rec));
   toast(rec.corregido ? "Guardada con tu corrección ✓" : "Guardada ✓");
   contar(true); reiniciar();
@@ -478,14 +548,16 @@ async function contar(pop) {
 async function abrirDatos() {
   const L = await contar();
   const por = {}; L.forEach(l => { const p = por[l.equipo] ||= { n: 0, ok: 0 }; p.n++; if (!l.corregido) p.ok++; });
-  const tot = L.length, bien = L.filter(l => !l.corregido).length, pend = L.filter(l => !l.exportada).length, nm = L.filter(l => l.multi).length;
-  $("resumen").textContent = tot ? `${tot} lecturas guardadas (${pend} sin exportar). El modelo acertó ${bien} de ${tot} (${Math.round(100 * bien / tot)}%). Meta para los técnicos: 98%.${nm ? ` ${nm} con más de un valor en el display.` : ""}` : "Todavía no guardaste lecturas.";
+  const tot = L.length, bien = L.filter(l => !l.corregido).length, pend = L.filter(l => !l.exportada).length, nm = L.filter(l => l.multi).length,
+    auto = L.filter(l => l.cajaAuto), sinTocar = auto.filter(l => iouN(l.cajaAuto, l.caja) >= 0.9).length;
+  $("resumen").textContent = tot ? `${tot} lecturas guardadas (${pend} sin exportar). El modelo acertó ${bien} de ${tot} (${Math.round(100 * bien / tot)}%). Meta para los técnicos: 98%.${nm ? ` ${nm} con más de un valor en el display.` : ""}${auto.length ? ` Recuadro automático: ${sinTocar} de ${auto.length} sin tocar (${Math.round(100 * sinTocar / auto.length)}%).` : ""}` : "Todavía no guardaste lecturas.";
   $("tabla").innerHTML = Object.entries(por).sort((a, b) => b[1].n - a[1].n).map(([k, p]) => {
     const pc = Math.round(100 * p.ok / p.n);
     return `<tr><td>${k}<div class="barra"><i style="transform:scaleX(${p.ok / p.n})"></i></div></td><td>${p.ok}/${p.n}</td><td>${pc}%</td></tr>`;
   }).join("");
   $("velo").classList.add("si"); $("hoja").classList.add("si");
 }
+const iouN = (a, b) => { const ix = Math.max(0, Math.min(a[0] + a[2], b[0] + b[2]) - Math.max(a[0], b[0])), iy = Math.max(0, Math.min(a[1] + a[3], b[1] + b[3]) - Math.max(a[1], b[1])), i = ix * iy; return i / (a[2] * a[3] + b[2] * b[3] - i + 1e-9); };
 const cerrarDatos = () => { $("velo").classList.remove("si"); $("hoja").classList.remove("si"); };
 $("abrirDatos").onclick = abrirDatos; $("velo").onclick = cerrarDatos;
 
@@ -512,14 +584,14 @@ const csvCampo = v => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""
 $("exportar").onclick = async () => {
   const L = (await todas()).filter(l => !l.exportada);
   if (!L.length) { toast("No hay lecturas nuevas para exportar"); return; }
-  const filas = [["recorte", "valor", "grupo", "equipo", "foto_original", "sugerido", "confianza", "corregido", "rol", "fecha", "modelo", "ms", "foto", "caja_x", "caja_y", "caja_w", "caja_h", "multi"]];
+  const filas = [["recorte", "valor", "grupo", "equipo", "foto_original", "sugerido", "confianza", "corregido", "rol", "fecha", "modelo", "ms", "foto", "caja_x", "caja_y", "caja_w", "caja_h", "multi", "auto_x", "auto_y", "auto_w", "auto_h", "auto_conf"]];
   const arch = [];
   for (const l of L) {
     const nom = `c_${l.id}.jpg`;
     arch.push({ nombre: "recortes/" + nom, datos: new Uint8Array(await l.img.arrayBuffer()) });
     let nf = "", cj = ["", "", "", ""];
     if (l.foto) { nf = `f_${l.id}.jpg`; arch.push({ nombre: "fotos/" + nf, datos: new Uint8Array(await l.foto.arrayBuffer()) }); cj = l.caja; }
-    filas.push([nom, l.valor, l.fecha.slice(0, 7), l.equipo, "celular", l.sugerido, l.confianza, l.corregido ? 1 : 0, l.rol, l.fecha, l.modelo, l.ms, nf, ...cj, l.multi == null ? "" : (l.multi ? 1 : 0)]);  // vacío = guardada antes de v3.1 (sin dato)
+    filas.push([nom, l.valor, l.fecha.slice(0, 7), l.equipo, "celular", l.sugerido, l.confianza, l.corregido ? 1 : 0, l.rol, l.fecha, l.modelo, l.ms, nf, ...cj, l.multi == null ? "" : (l.multi ? 1 : 0), ...(l.cajaAuto || ["", "", "", ""]), l.detConf == null ? "" : l.detConf]);  // vacío = guardada antes de v3.1 (sin dato)
   }
   arch.unshift({ nombre: "etiquetas.csv", datos: new TextEncoder().encode(filas.map(f => f.map(csvCampo).join(",")).join("\n") + "\n") });
   const ah = new Date(), dd = n => String(n).padStart(2, "0");   // hora local del teléfono (no UTC)
@@ -535,13 +607,14 @@ $("exportar").onclick = async () => {
 };
 $("archModelo").onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
-  const tipo = /spmk/i.test(f.name) ? "spmk" : "general", buf = await f.arrayBuffer();
+  const tipo = /detector/i.test(f.name) ? "detector" : /spmk/i.test(f.name) ? "spmk" : "general", buf = await f.arrayBuffer();
   try { await ort.InferenceSession.create(buf, { executionProviders: ["wasm"] }); }
   catch (err) { toast("Ese archivo no es un modelo válido"); return; }
-  await tx("modelos", "readwrite", s => s.put(buf, tipo)); delete sesiones[tipo]; await sesion(tipo);
-  toast(`Modelo ${tipo === "spmk" ? "especialista SPMK" : "general"} actualizado ✓`); e.target.value = "";
+  await tx("modelos", "readwrite", s => s.put(buf, tipo));
+  if (tipo === "detector") { detIntento = null; await detector(); } else { delete sesiones[tipo]; await sesion(tipo); }
+  toast(tipo === "detector" ? "Detector actualizado ✓" : `Modelo ${tipo === "spmk" ? "especialista SPMK" : "general"} actualizado ✓`); e.target.value = "";
 };
-$("restaurar").onclick = async () => { await tx("modelos", "readwrite", s => s.clear()); for (const k in sesiones) delete sesiones[k]; await sesion("general"); await sesion("spmk"); toast("Modelos originales ✓"); };
+$("restaurar").onclick = async () => { await tx("modelos", "readwrite", s => s.clear()); for (const k in sesiones) delete sesiones[k]; detIntento = null; await sesion("general"); await sesion("spmk"); await detector(); toast("Modelos originales ✓"); };
 let armadoBorrar = 0;
 $("borrar").onclick = async () => {
   const L = (await todas()).filter(l => l.exportada);
@@ -569,7 +642,7 @@ cargarMulti();
     vid.srcObject = st; await vid.play();
   } catch (e) { texto("Sin cámara: " + e.message); return; }
   try { await sesion(tipoModelo()); $("estModelo").textContent = "Modelo listo"; } catch (e) { $("estModelo").textContent = "No cargó el modelo: " + e.message; texto("Sin modelo"); return; }
-  sesion(tipoModelo() === "spmk" ? "general" : "spmk").catch(() => {});
+  sesion(tipoModelo() === "spmk" ? "general" : "spmk").catch(() => {}); detector();
   ponerGuia(); iniciarZoom(); reiniciar();
 })();
 </script>
